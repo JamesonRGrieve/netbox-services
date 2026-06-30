@@ -296,7 +296,7 @@ class ServiceInstance(NetBoxModel):
     class Meta:
         ordering = ["catalog", "hostname"]
         verbose_name = "Service Instance"
-        indexes = [models.Index(fields=["parent_object_type", "parent_object_id"])]
+        indexes = [models.Index(fields=["parent_object_type", "parent_object_id"], name="netbox_serv_parent__idx")]
 
     def __str__(self):
         return f"{self.catalog.name} @ {self.hostname or self.parent}"
@@ -356,7 +356,13 @@ def validate_integration_cardinality(integration):
             f"got {integration.provider.catalog.name}."
         )
 
+    # consumer_max limits how many *distinct providers* a consumer binds for this type. A re-save
+    # of the same provider is a duplicate edge (caught by the unique constraint), not a new
+    # binding, so exclude same-provider siblings — otherwise a duplicate trips this check before
+    # the DB constraint can raise IntegrityError.
     siblings = Integration.objects.filter(consumer=integration.consumer, type=integration.type)
+    if integration.provider_id:
+        siblings = siblings.exclude(provider_id=integration.provider_id)
     if integration.pk:
         siblings = siblings.exclude(pk=integration.pk)
     if catalog_entry.consumer_max is not None and siblings.count() >= catalog_entry.consumer_max:
