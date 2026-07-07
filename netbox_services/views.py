@@ -128,6 +128,31 @@ class IntegrationCatalogBulkDeleteView(generic.BulkDeleteView):
     table = tables.IntegrationCatalogTable
 
 
+class IntegrationCatalogParamView(generic.ObjectView):
+    queryset = models.IntegrationCatalogParam.objects.all()
+
+
+class IntegrationCatalogParamListView(generic.ObjectListView):
+    queryset = models.IntegrationCatalogParam.objects.all()
+    table = tables.IntegrationCatalogParamTable
+    filterset = filtersets.IntegrationCatalogParamFilterSet
+    filterset_form = forms.IntegrationCatalogParamFilterForm
+
+
+class IntegrationCatalogParamEditView(generic.ObjectEditView):
+    queryset = models.IntegrationCatalogParam.objects.all()
+    form = forms.IntegrationCatalogParamForm
+
+
+class IntegrationCatalogParamDeleteView(generic.ObjectDeleteView):
+    queryset = models.IntegrationCatalogParam.objects.all()
+
+
+class IntegrationCatalogParamBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.IntegrationCatalogParam.objects.all()
+    table = tables.IntegrationCatalogParamTable
+
+
 class CatalogTestStateView(generic.ObjectView):
     queryset = models.CatalogTestState.objects.all()
 
@@ -251,6 +276,31 @@ class IntegrationDeleteView(generic.ObjectDeleteView):
 class IntegrationBulkDeleteView(generic.BulkDeleteView):
     queryset = models.Integration.objects.all()
     table = tables.IntegrationTable
+
+
+class IntegrationParamView(generic.ObjectView):
+    queryset = models.IntegrationParam.objects.all()
+
+
+class IntegrationParamListView(generic.ObjectListView):
+    queryset = models.IntegrationParam.objects.all()
+    table = tables.IntegrationParamTable
+    filterset = filtersets.IntegrationParamFilterSet
+    filterset_form = forms.IntegrationParamFilterForm
+
+
+class IntegrationParamEditView(generic.ObjectEditView):
+    queryset = models.IntegrationParam.objects.all()
+    form = forms.IntegrationParamForm
+
+
+class IntegrationParamDeleteView(generic.ObjectDeleteView):
+    queryset = models.IntegrationParam.objects.all()
+
+
+class IntegrationParamBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.IntegrationParam.objects.all()
+    table = tables.IntegrationParamTable
 
 
 class HAMirrorView(generic.ObjectView):

@@ -3,7 +3,8 @@ import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 from .models import (
     CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
 )
 
 
@@ -64,6 +65,32 @@ class IntegrationCatalogTable(NetBoxTable):
         fields = ("pk", "id", "catalog", "type", "requires_service", "provider_scope", "consumer_max",
                   "tags", "created", "last_updated")
         default_columns = ("catalog", "type", "requires_service", "provider_scope", "consumer_max")
+
+
+class IntegrationCatalogParamTable(NetBoxTable):
+    integration_catalog = tables.Column(linkify=True)
+    key = tables.Column(linkify=True)
+    value_type = columns.ChoiceFieldColumn()
+    required = columns.BooleanColumn()
+    secret = columns.BooleanColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:integrationcatalogparam_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = IntegrationCatalogParam
+        fields = ("pk", "id", "integration_catalog", "key", "value_type", "required", "default",
+                  "secret", "description", "tags", "created", "last_updated")
+        default_columns = ("integration_catalog", "key", "value_type", "required", "secret")
+
+
+class IntegrationParamTable(NetBoxTable):
+    integration = tables.Column(linkify=True)
+    key = tables.Column(linkify=True)
+    tags = columns.TagColumn(url_name="plugins:netbox_services:integrationparam_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = IntegrationParam
+        fields = ("pk", "id", "integration", "key", "value", "tags", "created", "last_updated")
+        default_columns = ("integration", "key", "value")
 
 
 class CatalogTestStateTable(NetBoxTable):

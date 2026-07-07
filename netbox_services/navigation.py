@@ -21,6 +21,7 @@ menu = PluginMenu(
                 _item("catalogtoken", "Tokens"),
                 _item("catalogsecondaryport", "Secondary Ports"),
                 _item("integrationcatalog", "Integration Catalog"),
+                _item("integrationcatalogparam", "Integration Catalog Params"),
             ),
         ),
         (
@@ -39,7 +40,11 @@ menu = PluginMenu(
         ),
         (
             "Edges",
-            (_item("integration", "Integrations"), _item("hamirror", "HA Mirrors")),
+            (
+                _item("integration", "Integrations"),
+                _item("integrationparam", "Integration Params"),
+                _item("hamirror", "HA Mirrors"),
+            ),
         ),
     ),
     icon_class="mdi mdi-application-cog",

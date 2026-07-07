@@ -8,10 +8,13 @@ from django.db.utils import IntegrityError
 from django.test import TestCase
 from ipam.models import Service
 from utilities.testing import create_test_device
-from ..choices import HAStrategyChoices, ProviderScopeChoices, ServiceInstanceStatusChoices
+from ..choices import (
+    HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
+    ServiceInstanceStatusChoices,
+)
 from ..models import (
     CatalogCredential, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration,
-    IntegrationCatalog,
+    IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
 )
 from .utils import make_catalog, make_instance, make_vm
 
@@ -129,6 +132,111 @@ class IntegrationCardinalityTest(TestCase):
         Integration.objects.create(consumer=self.consumer, provider=self.provider, type="openbao")
         with self.assertRaises(IntegrityError), transaction.atomic():
             Integration(consumer=self.consumer, provider=self.provider, type="openbao").save()
+
+
+class IntegrationParamModelTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.openbao = make_catalog("openbao")
+        cls.authentik = make_catalog("authentik")
+        cls.icat = IntegrationCatalog.objects.create(
+            catalog=cls.authentik, type="openbao", requires_service="openbao"
+        )
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=cls.icat, key="db_index",
+            value_type=IntegrationParamValueTypeChoices.INT, default="0",
+        )
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=cls.icat, key="scopes", value_type=IntegrationParamValueTypeChoices.LIST
+        )
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=cls.icat, key="redirect", value_type=IntegrationParamValueTypeChoices.URL
+        )
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=cls.icat, key="enabled", value_type=IntegrationParamValueTypeChoices.BOOL
+        )
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=cls.icat, key="client_secret",
+            value_type=IntegrationParamValueTypeChoices.SECRET_REF, secret=True,
+        )
+        cls.consumer = make_instance(cls.authentik, hostname="authentik")
+        cls.provider = make_instance(cls.openbao, hostname="openbao")
+        cls.edge = Integration.objects.create(consumer=cls.consumer, provider=cls.provider, type="openbao")
+
+    def test_catalog_param_declaration_str_url(self):
+        p = IntegrationCatalogParam.objects.get(integration_catalog=self.icat, key="db_index")
+        self.assertIn("db_index", str(p))
+        self.assertIn("/plugins/services/integration-catalog-params/", p.get_absolute_url())
+
+    def test_catalog_param_unique_and_cascade(self):
+        icat2 = IntegrationCatalog.objects.create(
+            catalog=make_catalog("nextcloud"), type="s3", requires_service="minio"
+        )
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=icat2, key="bucket", value_type=IntegrationParamValueTypeChoices.STRING
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            IntegrationCatalogParam.objects.create(
+                integration_catalog=icat2, key="bucket",
+                value_type=IntegrationParamValueTypeChoices.STRING,
+            )
+        icat2.delete()
+        self.assertFalse(IntegrationCatalogParam.objects.filter(key="bucket").exists())
+
+    def test_instance_override_valid(self):
+        param = IntegrationParam(integration=self.edge, key="db_index", value="3")
+        param.full_clean()
+        param.save()
+        self.assertIn("db_index", str(param))
+        self.assertIn("/plugins/services/integration-params/", param.get_absolute_url())
+
+    def test_instance_param_unique(self):
+        IntegrationParam.objects.create(integration=self.edge, key="db_index", value="1")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            IntegrationParam(integration=self.edge, key="db_index", value="2").save()
+
+    def test_reject_unknown_key(self):
+        with self.assertRaises(ValidationError):
+            IntegrationParam(integration=self.edge, key="not_declared", value="x").full_clean()
+
+    def test_reject_bad_int(self):
+        with self.assertRaises(ValidationError):
+            IntegrationParam(integration=self.edge, key="db_index", value="not-an-int").full_clean()
+
+    def test_reject_bad_bool(self):
+        with self.assertRaises(ValidationError):
+            IntegrationParam(integration=self.edge, key="enabled", value="maybe").full_clean()
+        IntegrationParam(integration=self.edge, key="enabled", value="true").full_clean()
+
+    def test_reject_bad_url(self):
+        with self.assertRaises(ValidationError):
+            IntegrationParam(integration=self.edge, key="redirect", value="not a url").full_clean()
+        IntegrationParam(integration=self.edge, key="redirect", value="https://authentik.example/cb").full_clean()
+
+    def test_reject_inline_secret(self):
+        # An inline literal (a URL / an email / a bare token with no path) is rejected on a secret param.
+        for inline in ("https://example.com/token", "user@example.com", "literaltoken"):
+            with self.assertRaises(ValidationError):
+                IntegrationParam(integration=self.edge, key="client_secret", value=inline).full_clean()
+        # An OpenBao path reference is accepted.
+        IntegrationParam(integration=self.edge, key="client_secret", value="secret/data/authentik/client").full_clean()
+
+    def test_missing_required_without_default(self):
+        # A required param with no default must have an instance row; the edge's clean() reports it missing.
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=self.icat, key="issuer_url",
+            value_type=IntegrationParamValueTypeChoices.URL, required=True,
+        )
+        with self.assertRaises(ValidationError):
+            self.edge.full_clean()
+        IntegrationParam.objects.create(integration=self.edge, key="issuer_url", value="https://id.example/")
+        self.edge.full_clean()
+
+    def test_list_order_round_trips(self):
+        value = "openid\nprofile\nemail\ngroups"
+        param = IntegrationParam.objects.create(integration=self.edge, key="scopes", value=value)
+        param.refresh_from_db()
+        self.assertEqual(param.value.split("\n"), ["openid", "profile", "email", "groups"])
 
 
 class HAMirrorModelTest(TestCase):

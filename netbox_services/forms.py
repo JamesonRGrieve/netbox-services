@@ -11,12 +11,13 @@ from utilities.forms.fields import (
 from utilities.forms.rendering import FieldSet
 from virtualization.models import VirtualMachine
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, ProviderScopeChoices,
-    ServiceInstanceStatusChoices,
+    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
+    ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
     CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
 )
 
 
@@ -79,6 +80,28 @@ class IntegrationCatalogForm(NetBoxModelForm):
         model = IntegrationCatalog
         fields = ["catalog", "type", "requires_service", "requires_tokens", "playbook", "description",
                   "provider_scope", "consumer_max", "tags"]
+
+
+class IntegrationCatalogParamForm(NetBoxModelForm):
+    integration_catalog = DynamicModelChoiceField(queryset=IntegrationCatalog.objects.all())
+    fieldsets = (
+        FieldSet("integration_catalog", "key", "value_type", "required", "default", "secret",
+                 "description", name="Catalog param"),
+    )
+
+    class Meta:
+        model = IntegrationCatalogParam
+        fields = ["integration_catalog", "key", "value_type", "required", "default", "secret",
+                  "description", "tags"]
+
+
+class IntegrationParamForm(NetBoxModelForm):
+    integration = DynamicModelChoiceField(queryset=Integration.objects.all())
+    fieldsets = (FieldSet("integration", "key", "value", name="Param value"),)
+
+    class Meta:
+        model = IntegrationParam
+        fields = ["integration", "key", "value", "tags"]
 
 
 class CatalogTestStateForm(NetBoxModelForm):
@@ -203,6 +226,25 @@ class IntegrationCatalogFilterForm(NetBoxModelFilterSetForm):
     catalog_id = DynamicModelMultipleChoiceField(queryset=ServiceCatalog.objects.all(), required=False, label="Catalog")
     provider_scope = forms.MultipleChoiceField(choices=ProviderScopeChoices, required=False)
     tag = TagFilterField(IntegrationCatalog)
+
+
+class IntegrationCatalogParamFilterForm(NetBoxModelFilterSetForm):
+    model = IntegrationCatalogParam
+    integration_catalog_id = DynamicModelMultipleChoiceField(
+        queryset=IntegrationCatalog.objects.all(), required=False, label="Integration Catalog"
+    )
+    value_type = forms.MultipleChoiceField(choices=IntegrationParamValueTypeChoices, required=False)
+    required = forms.NullBooleanField(required=False)
+    secret = forms.NullBooleanField(required=False)
+    tag = TagFilterField(IntegrationCatalogParam)
+
+
+class IntegrationParamFilterForm(NetBoxModelFilterSetForm):
+    model = IntegrationParam
+    integration_id = DynamicModelMultipleChoiceField(
+        queryset=Integration.objects.all(), required=False, label="Integration"
+    )
+    tag = TagFilterField(IntegrationParam)
 
 
 class CatalogTestStateFilterForm(NetBoxModelFilterSetForm):

@@ -15,6 +15,8 @@ VM or raw-OS device; ports linked natively to ``ipam.Service``), :class:`Instanc
 Every attribute is a real typed column or a child row — **no config_context, no CustomField
 data-blob**. Secret *values* never live here; only OpenBao path references.
 """
+from urllib.parse import urlparse
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
@@ -23,8 +25,8 @@ from django.urls import reverse
 from ipam.choices import ServiceProtocolChoices
 from netbox.models import NetBoxModel
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, ProviderScopeChoices,
-    ServiceInstanceStatusChoices,
+    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
+    ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 
 # Content types a ServiceInstance may be installed onto (a guest VM or a raw-OS device).
@@ -211,6 +213,47 @@ class IntegrationCatalog(NetBoxModel):
         return ProviderScopeChoices.colors.get(self.provider_scope)
 
 
+class IntegrationCatalogParam(NetBoxModel):
+    """A config param an integration *type* accepts (the typed schema for the per-edge params that
+    today live inline in each ``integrate_*.yml``: SSO redirect URIs/scopes/claims, cache db-index,
+    S3 bucket/prefix, SMTP from-address, …). ``default`` is the catalog default; an edge stores an
+    :class:`IntegrationParam` row **only when it overrides** this (or for a required param with no
+    default). ``secret`` ⇒ the value is a ``secret_ref`` (OpenBao path), never an inline value."""
+
+    integration_catalog = models.ForeignKey(
+        IntegrationCatalog, on_delete=models.CASCADE, related_name="params"
+    )
+    key = models.CharField(max_length=100, help_text="Param key (e.g. redirect_uris, db_index, bucket).")
+    value_type = models.CharField(max_length=16, choices=IntegrationParamValueTypeChoices)
+    required = models.BooleanField(default=False)
+    default = models.CharField(
+        max_length=255, blank=True, help_text="Catalog default; an edge stores a row only when it overrides this."
+    )
+    secret = models.BooleanField(
+        default=False, help_text="When set, the value is a secret_ref (OpenBao path), never an inline value."
+    )
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["integration_catalog", "key"]
+        verbose_name = "Integration Catalog Param"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["integration_catalog", "key"],
+                name="netbox_services_integrationcatalogparam_unique_catalog_key",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.integration_catalog}: {self.key}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:integrationcatalogparam", args=[self.pk])
+
+    def get_value_type_color(self):
+        return IntegrationParamValueTypeChoices.colors.get(self.value_type)
+
+
 class CatalogTestState(NetBoxModel):
     """Harness test result for a (catalog, distro): which lifecycle stages passed + telemetry. The
     harness (a Semaphore job) writes this back; it is the home of today's about.json ``state{}``."""
@@ -381,6 +424,37 @@ def validate_integration_cardinality(integration):
             )
 
 
+def _integration_catalog_entry(integration):
+    """Resolve the consumer catalog's :class:`IntegrationCatalog` row for an edge's type (or None).
+    An :class:`IntegrationParam` is validated against that entry's :class:`IntegrationCatalogParam`
+    schema — the params an integration *type* accepts."""
+    if not (integration.consumer_id and integration.type):
+        return None
+    return IntegrationCatalog.objects.filter(
+        catalog=integration.consumer.catalog, type=integration.type
+    ).first()
+
+
+def validate_integration_params(integration):
+    """Completeness backstop: every required catalog param **without a default** must have an
+    instance :class:`IntegrationParam` row on the edge. Guarded on ``pk`` — params can only exist
+    once the edge does, so this validates on update (or an explicit re-clean), never blocking the
+    edge's first create. Effective config = catalog defaults overlaid with the instance rows."""
+    if not integration.pk:
+        return
+    entry = _integration_catalog_entry(integration)
+    if entry is None:
+        return
+    present = set(integration.params.values_list("key", flat=True))
+    missing = sorted(
+        p.key for p in entry.params.filter(required=True) if not p.default and p.key not in present
+    )
+    if missing:
+        raise ValidationError(
+            f"Integration '{integration.type}' is missing required param(s): {', '.join(missing)}."
+        )
+
+
 class Integration(NetBoxModel):
     """A realized consumer→provider binding (the instance edge the catalog lacks). ``type`` matches
     the consumer catalog's :class:`IntegrationCatalog` entry, against which cardinality is checked."""
@@ -409,6 +483,91 @@ class Integration(NetBoxModel):
     def clean(self):
         super().clean()
         validate_integration_cardinality(self)
+        validate_integration_params(self)
+
+
+def validate_integration_param_value(catalog_param, value):
+    """Parse-check an :class:`IntegrationParam.value` against its :class:`IntegrationCatalogParam`.
+    A ``secret`` param (or ``secret_ref`` type) must be an OpenBao **path reference** — it must
+    contain ``/`` and must not look like an inline literal (a URL ``://`` or an email ``@``); an
+    inline value there is rejected (secret *values* never live in NetBox). Otherwise the value must
+    parse for its ``value_type`` (``int`` → ``int()``, ``bool`` → true/false, ``url`` → scheme +
+    host). ``string`` / ``list`` carry no structural constraint (``list`` order is preserved by its
+    newline-delimited storage)."""
+    is_secret = catalog_param.secret or catalog_param.value_type == IntegrationParamValueTypeChoices.SECRET_REF
+    if is_secret:
+        if "://" in value or "@" in value or "/" not in value:
+            raise ValidationError(
+                f"Param '{catalog_param.key}' is a secret: store an OpenBao path reference "
+                f"(must contain '/', never an inline value), got '{value}'."
+            )
+        return
+    value_type = catalog_param.value_type
+    if value_type == IntegrationParamValueTypeChoices.INT:
+        try:
+            int(value)
+        except (TypeError, ValueError):
+            raise ValidationError(f"Param '{catalog_param.key}' must be an integer, got '{value}'.")
+    elif value_type == IntegrationParamValueTypeChoices.BOOL:
+        if value.strip().lower() not in {"true", "false"}:
+            raise ValidationError(f"Param '{catalog_param.key}' must be 'true' or 'false', got '{value}'.")
+    elif value_type == IntegrationParamValueTypeChoices.URL:
+        parsed = urlparse(value)
+        if not (parsed.scheme and parsed.netloc):
+            raise ValidationError(f"Param '{catalog_param.key}' must be a URL with a scheme, got '{value}'.")
+
+
+def validate_integration_param(param):
+    """Every :class:`IntegrationParam` key must be a declared :class:`IntegrationCatalogParam` for
+    the edge's integration type (resolved via the consumer catalog's :class:`IntegrationCatalog`),
+    and its ``value`` must satisfy :func:`validate_integration_param_value`."""
+    if not (param.integration_id and param.key):
+        return
+    entry = _integration_catalog_entry(param.integration)
+    if entry is None:
+        raise ValidationError(
+            f"Integration '{param.integration.type}' has no catalog entry; cannot validate param '{param.key}'."
+        )
+    catalog_param = IntegrationCatalogParam.objects.filter(integration_catalog=entry, key=param.key).first()
+    if catalog_param is None:
+        raise ValidationError(
+            f"'{param.key}' is not a declared param of integration '{param.integration.type}'."
+        )
+    validate_integration_param_value(catalog_param, param.value)
+
+
+class IntegrationParam(NetBoxModel):
+    """A per-edge config param value on ONE :class:`Integration` — the instance-level SoT for the
+    parameters that today live inline in each ``integrate_*.yml``. Stored **only on override** of
+    the catalog default (or for a required param with no default); the consumer merges catalog
+    defaults with these rows for the effective config. ``value`` is rendered per the matched
+    :class:`IntegrationCatalogParam`'s ``value_type`` (``list`` = newline-delimited, order
+    preserved; ``secret_ref`` = OpenBao path reference, never the secret value)."""
+
+    integration = models.ForeignKey(Integration, on_delete=models.CASCADE, related_name="params")
+    key = models.CharField(max_length=100, help_text="Matches an IntegrationCatalogParam.key for the edge's type.")
+    value = models.CharField(
+        max_length=255, help_text="Rendered per value_type (list = newline-delimited; secret_ref = OpenBao path)."
+    )
+
+    class Meta:
+        ordering = ["integration", "key"]
+        verbose_name = "Integration Param"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["integration", "key"], name="netbox_services_integrationparam_unique_integration_key"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.integration}: {self.key}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:integrationparam", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        validate_integration_param(self)
 
 
 class HAMirror(NetBoxModel):

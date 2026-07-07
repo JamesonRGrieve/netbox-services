@@ -3,12 +3,14 @@ from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
 from ..models import (
     CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
 )
 from .serializers import (
     CatalogCredentialSerializer, CatalogSecondaryPortSerializer, CatalogTestIntegrationSerializer,
-    CatalogTestStateSerializer, CatalogTokenSerializer, HAMirrorSerializer, IntegrationCatalogSerializer,
-    IntegrationSerializer, InstanceOpenBaoPathSerializer, ServiceCatalogSerializer, ServiceInstanceSerializer,
+    CatalogTestStateSerializer, CatalogTokenSerializer, HAMirrorSerializer, IntegrationCatalogParamSerializer,
+    IntegrationCatalogSerializer, IntegrationParamSerializer, IntegrationSerializer,
+    InstanceOpenBaoPathSerializer, ServiceCatalogSerializer, ServiceInstanceSerializer,
 )
 
 
@@ -42,6 +44,12 @@ class IntegrationCatalogViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.IntegrationCatalogFilterSet
 
 
+class IntegrationCatalogParamViewSet(NetBoxModelViewSet):
+    queryset = IntegrationCatalogParam.objects.prefetch_related("integration_catalog", "tags")
+    serializer_class = IntegrationCatalogParamSerializer
+    filterset_class = filtersets.IntegrationCatalogParamFilterSet
+
+
 class CatalogTestStateViewSet(NetBoxModelViewSet):
     queryset = CatalogTestState.objects.prefetch_related("catalog", "tags")
     serializer_class = CatalogTestStateSerializer
@@ -70,6 +78,12 @@ class IntegrationViewSet(NetBoxModelViewSet):
     queryset = Integration.objects.prefetch_related("consumer", "provider", "tags")
     serializer_class = IntegrationSerializer
     filterset_class = filtersets.IntegrationFilterSet
+
+
+class IntegrationParamViewSet(NetBoxModelViewSet):
+    queryset = IntegrationParam.objects.prefetch_related("integration", "tags")
+    serializer_class = IntegrationParamSerializer
+    filterset_class = filtersets.IntegrationParamFilterSet
 
 
 class HAMirrorViewSet(NetBoxModelViewSet):

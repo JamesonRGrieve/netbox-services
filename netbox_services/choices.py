@@ -59,3 +59,23 @@ class DatabaseTypeChoices(ChoiceSet):
     CHOICES = [
         (POSTGRESQL, "PostgreSQL"), (MARIADB, "MariaDB"), (MYSQL, "MySQL"), (SQLITE, "SQLite"),
     ]
+
+
+class IntegrationParamValueTypeChoices(ChoiceSet):
+    """Rendered type of a per-edge integration config param value. ``list`` is newline-delimited
+    and order-preserving; ``secret_ref`` is an OpenBao path reference (never the secret value —
+    the value resolves at apply via the same OpenBao read the tokens use)."""
+    STRING = "string"
+    INT = "int"
+    BOOL = "bool"
+    URL = "url"
+    LIST = "list"
+    SECRET_REF = "secret_ref"
+    CHOICES = [
+        (STRING, "String", "gray"),
+        (INT, "Integer", "blue"),
+        (BOOL, "Boolean", "purple"),
+        (URL, "URL", "cyan"),
+        (LIST, "List", "green"),
+        (SECRET_REF, "Secret ref", "red"),
+    ]

@@ -4,9 +4,11 @@ mixins (no GraphQL type yet). Integration create_data is kept within the cardina
 unbounded provider) so the pre_save backstop accepts every created edge."""
 from django.urls import reverse
 from utilities.testing import APIViewTestCases, create_test_device
+from ..choices import IntegrationParamValueTypeChoices
 from ..models import (
     CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
 )
 from .utils import make_catalog, make_instance, make_vm
 
@@ -106,6 +108,28 @@ class IntegrationCatalogAPITest(_CRUD):
             {"catalog": cat.pk, "type": "openbao", "requires_service": "openbao", "consumer_max": 1},
             {"catalog": cat.pk, "type": "stalwart", "requires_service": "stalwart"},
             {"catalog": cat.pk, "type": "alloy", "requires_service": "alloy", "provider_scope": "shared"},
+        ]
+
+
+class IntegrationCatalogParamAPITest(_CRUD):
+    model = IntegrationCatalogParam
+    brief_fields = ["display", "id", "key", "url", "value_type"]
+    bulk_update_data = {"required": True}
+
+    @classmethod
+    def setUpTestData(cls):
+        icat = IntegrationCatalog.objects.create(
+            catalog=make_catalog("authentik"), type="openbao", requires_service="openbao"
+        )
+        IntegrationCatalogParam.objects.bulk_create([
+            IntegrationCatalogParam(integration_catalog=icat, key=f"k{i}",
+                                    value_type=IntegrationParamValueTypeChoices.STRING)
+            for i in range(3)
+        ])
+        cls.create_data = [
+            {"integration_catalog": icat.pk, "key": "db_index", "value_type": "int", "default": "0"},
+            {"integration_catalog": icat.pk, "key": "scopes", "value_type": "list", "required": True},
+            {"integration_catalog": icat.pk, "key": "client_secret", "value_type": "secret_ref", "secret": True},
         ]
 
 
@@ -221,6 +245,36 @@ class IntegrationAPITest(_CRUD):
             {"consumer": cls.consumer.pk, "provider": providers[3].pk, "type": "openbao"},
             {"consumer": cls.consumer.pk, "provider": providers[4].pk, "type": "openbao"},
             {"consumer": cls.consumer.pk, "provider": providers[5].pk, "type": "openbao"},
+        ]
+
+
+class IntegrationParamAPITest(_CRUD):
+    model = IntegrationParam
+    brief_fields = ["display", "id", "key", "url"]
+    bulk_update_data = {"value": "changed"}
+
+    @classmethod
+    def setUpTestData(cls):
+        authentik = make_catalog("authentik")
+        openbao = make_catalog("openbao")
+        icat = IntegrationCatalog.objects.create(catalog=authentik, type="openbao", requires_service="openbao")
+        # Declared catalog params for every key the tests touch (create + existing); API create runs
+        # full_clean(), so each key must be declared and each value must parse for its value_type.
+        for key, vt in (
+            ("k0", "string"), ("k1", "string"), ("k2", "string"),
+            ("db_index", "int"), ("bucket", "string"), ("from_address", "string"),
+        ):
+            IntegrationCatalogParam.objects.create(integration_catalog=icat, key=key, value_type=vt)
+        consumer = make_instance(authentik, hostname="authentik")
+        provider = make_instance(openbao, hostname="openbao")
+        edge = Integration.objects.create(consumer=consumer, provider=provider, type="openbao")
+        IntegrationParam.objects.bulk_create([
+            IntegrationParam(integration=edge, key=f"k{i}", value="v") for i in range(3)
+        ])
+        cls.create_data = [
+            {"integration": edge.pk, "key": "db_index", "value": "3"},
+            {"integration": edge.pk, "key": "bucket", "value": "assets"},
+            {"integration": edge.pk, "key": "from_address", "value": "noreply@example.com"},
         ]
 
 

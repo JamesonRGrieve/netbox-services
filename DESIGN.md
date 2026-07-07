@@ -106,6 +106,16 @@ Full mirror of the `about.json` payload (decision #2) — anything a consumer re
 provider_scope (shared|dedicated), consumer_max`. Seeded with **reconcile-delete**
 (decision #3): removed `about.json` entries are pruned, not just upserted.
 
+### IntegrationCatalogParam  *(child of IntegrationCatalog — the typed per-edge param schema)*
+`FK→IntegrationCatalog, key, value_type (string|int|bool|url|list|secret_ref), required,
+default, secret, description`. Declares **which config params an integration TYPE accepts** —
+the SoT for the parameters that today live inline in each `integrate_*.yml` (SSO redirect
+URIs / scopes / claims, cache db-index, S3 bucket/prefix, SMTP from-address, …). Mirrors the
+catalog-declares / instance-values split already used for tokens & ports:
+`IntegrationCatalogParam` is the schema, `IntegrationParam` is the per-edge value.
+`unique(integration_catalog, key)`. `default` is the catalog default; `secret=True` ⇒ the value
+is a `secret_ref` (OpenBao path), never inline.
+
 ### CatalogTestState  *(child of ServiceCatalog — harness test matrix, decision #13)*
 `FK→ServiceCatalog, distro, install, init, customize, unlock, integrate{}, telemetry
 {peak_memory_mb, peak_cpu_load, install_duration_s}`. Keyed **(catalog, distro, stage)** —
@@ -125,6 +135,21 @@ decision #7), `resources` (actual), `openbao_paths{}` (credential + provides_tok
 `FK consumer→ServiceInstance, FK provider→ServiceInstance, type (= IntegrationCatalog
 type), requires_tokens, description`. `unique_together(consumer, type, provider)`;
 cardinality enforced per §2.
+
+### IntegrationParam  *(child of Integration — the per-edge config value)*
+`FK→Integration, key, value`. The instance-level SoT for the params a `tofu-*` consumer reads
+from the REST API instead of an inline `integrate_*.yml`. **Store-on-override:** an edge gets a
+row **only when it sets a value differing from the `IntegrationCatalogParam.default`** (or for a
+required param with no default); the effective config = catalog defaults overlaid with these
+instance rows (the consumer merges). `unique(integration, key)`. `value` is rendered per the
+matched catalog param's `value_type` — `list` is newline-delimited (order preserved), `secret_ref`
+is an OpenBao path reference. **Validation** (`clean()` + the edge's `clean()`): every `key` must be
+a declared `IntegrationCatalogParam` for the edge's type (resolved via the consumer catalog's
+`IntegrationCatalog`); every required param without a default must have an instance row; `value`
+must parse for its `value_type` (`int`→`int()`, `bool`→true/false, `url`→scheme+host).
+**Secrets boundary:** `secret=True` (or `secret_ref`) ⇒ the value must be an OpenBao **path**
+(contains `/`, not an inline URL/email/literal); an inline value is rejected. Secret *values* never
+live in NetBox — they resolve at apply via the same OpenBao read the tokens use.
 
 ### HAMirror  *(edge — HA pairing, separate from Integration, decision #10)*
 `FK mirror→ServiceInstance, FK primary→ServiceInstance, ha_strategy (resolved from the

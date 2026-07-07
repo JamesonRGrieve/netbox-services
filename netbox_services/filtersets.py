@@ -6,12 +6,13 @@ import django_filters
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, ProviderScopeChoices,
-    ServiceInstanceStatusChoices,
+    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
+    ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
     CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
 )
 
 
@@ -89,6 +90,21 @@ class IntegrationCatalogFilterSet(_CatalogChildFilterMixin):
         return queryset.filter(Q(type__icontains=value) | Q(requires_service__icontains=value))
 
 
+class IntegrationCatalogParamFilterSet(NetBoxModelFilterSet):
+    integration_catalog_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="integration_catalog", queryset=IntegrationCatalog.objects.all(),
+        label="Integration Catalog (ID)",
+    )
+    value_type = django_filters.MultipleChoiceFilter(choices=IntegrationParamValueTypeChoices)
+
+    class Meta:
+        model = IntegrationCatalogParam
+        fields = ["id", "key", "value_type", "required", "secret"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(key__icontains=value) | Q(description__icontains=value))
+
+
 class CatalogTestStateFilterSet(_CatalogChildFilterMixin):
     distro = django_filters.MultipleChoiceFilter(choices=DistroChoices)
 
@@ -154,6 +170,19 @@ class IntegrationFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(type__icontains=value))
+
+
+class IntegrationParamFilterSet(NetBoxModelFilterSet):
+    integration_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="integration", queryset=Integration.objects.all(), label="Integration (ID)"
+    )
+
+    class Meta:
+        model = IntegrationParam
+        fields = ["id", "key", "value"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(key__icontains=value) | Q(value__icontains=value))
 
 
 class HAMirrorFilterSet(NetBoxModelFilterSet):

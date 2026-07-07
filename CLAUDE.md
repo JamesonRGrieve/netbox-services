@@ -55,7 +55,7 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
 |------|----------------|
 | `__init__.py` | `PluginConfig` — name `netbox_services`, `base_url='services'`, min/max 4.6; `ready()` wires `signals` |
 | `choices.py` | `ChoiceSet`s: instance status, provider scope, HA strategy, distro, database type (port protocol reuses core `ipam.choices`) |
-| `models.py` | the 11 models (see below) + `validate_integration_cardinality` |
+| `models.py` | the 13 models (see below) + `validate_integration_cardinality` / `validate_integration_param(s)` |
 | `signals.py` | `pre_save` backstop calling `validate_integration_cardinality` (catches ORM/seeder writes that bypass `clean()`) |
 | `migrations/0001_initial.py` | hand-authored (NetBox disables makemigrations in prod); verify with `makemigrations --check --dry-run` |
 | `api/serializers.py`, `api/views.py`, `api/urls.py` | REST (`NetBoxModelViewSet`) — the contract the provider + seeder read |
@@ -73,6 +73,11 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
 - **CatalogSecondaryPort** (FK): `port`, `protocol`, `name` (verification.secondary_ports[]).
 - **IntegrationCatalog** (FK): `type`, `requires_service`, `requires_tokens[]`, `playbook`,
   `description`, `provider_scope` (shared|dedicated), `consumer_max` (cardinality source).
+- **IntegrationCatalogParam** (FK IntegrationCatalog): `key`, `value_type`
+  (string|int|bool|url|list|secret_ref), `required`, `default`, `secret`, `description` — the typed
+  schema for the per-edge integration config params (SSO redirect URIs/scopes, cache db-index, S3
+  bucket/prefix, SMTP from-address, …) that today live inline in each `integrate_*.yml`. Catalog
+  side of the catalog-declares / instance-values split (sibling of `CatalogToken`).
 - **CatalogTestState** (FK): `(catalog, distro)` stages (install/init/customize/unlock) + telemetry
   — the home of about.json `state{}`, written back by the harness (a Semaphore job).
   - **CatalogTestIntegration** (FK test_state): per-provider `integrate` result.
@@ -86,6 +91,14 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
   `description`; `unique_together(consumer, type, provider)`; cardinality via
   `validate_integration_cardinality` (clean() + pre_save signal). `consumer_max` is a count check,
   so validation-only (cannot be a DB constraint) and can race under concurrent writes.
+- **IntegrationParam** (FK Integration): `key`, `value` — the per-edge config value a `tofu-*`
+  consumer reads from the REST API. **Store-on-override**: a row exists only when the edge sets a
+  value differing from the `IntegrationCatalogParam.default` (or a required param with no default);
+  effective config = catalog defaults overlaid with these rows. `unique(integration, key)`;
+  `value` rendered per the matched catalog param's `value_type` (`list` = newline-delimited, order
+  preserved; `secret_ref` = OpenBao path). `clean()` rejects an undeclared key, a value that fails
+  its `value_type` parse, and an **inline value on a secret param** (must be an OpenBao path — secret
+  values never live here); the edge's `clean()` rejects a missing required param without a default.
 - **HAMirror** (edge): `mirror`/`primary` FK → ServiceInstance; `unique(mirror, primary)`; both
   must be the same catalog type; the reconciler reads `mirror.catalog.ha_strategy`.
 

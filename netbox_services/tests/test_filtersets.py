@@ -1,11 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """FilterSet tests against a real DB (no mocks): the explicit FK + choice filters and search."""
 from django.test import TestCase
-from ..choices import HAStrategyChoices, ProviderScopeChoices, ServiceInstanceStatusChoices
-from ..filtersets import (
-    IntegrationCatalogFilterSet, IntegrationFilterSet, ServiceCatalogFilterSet, ServiceInstanceFilterSet,
+from ..choices import (
+    HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
+    ServiceInstanceStatusChoices,
 )
-from ..models import Integration, IntegrationCatalog, ServiceCatalog, ServiceInstance
+from ..filtersets import (
+    IntegrationCatalogFilterSet, IntegrationCatalogParamFilterSet, IntegrationFilterSet,
+    ServiceCatalogFilterSet, ServiceInstanceFilterSet,
+)
+from ..models import (
+    Integration, IntegrationCatalog, IntegrationCatalogParam, ServiceCatalog, ServiceInstance,
+)
 from .utils import make_catalog, make_instance
 
 
@@ -55,6 +61,48 @@ class IntegrationCatalogFilterTest(TestCase):
 
     def test_requires_service(self):
         self.assertEqual(self.filterset({"requires_service": ["openbao"]}, self.queryset).qs.count(), 1)
+
+
+class IntegrationCatalogParamFilterTest(TestCase):
+    queryset = IntegrationCatalogParam.objects.all()
+    filterset = IntegrationCatalogParamFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        icat = IntegrationCatalog.objects.create(
+            catalog=make_catalog("authentik"), type="openbao", requires_service="openbao"
+        )
+        cls.icat = icat
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=icat, key="db_index", value_type=IntegrationParamValueTypeChoices.INT
+        )
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=icat, key="scopes", value_type=IntegrationParamValueTypeChoices.LIST,
+            required=True,
+        )
+        IntegrationCatalogParam.objects.create(
+            integration_catalog=icat, key="client_secret",
+            value_type=IntegrationParamValueTypeChoices.SECRET_REF, secret=True,
+        )
+
+    def test_integration_catalog_id(self):
+        self.assertEqual(
+            self.filterset({"integration_catalog_id": [self.icat.pk]}, self.queryset).qs.count(), 3
+        )
+
+    def test_value_type(self):
+        self.assertEqual(
+            self.filterset({"value_type": [IntegrationParamValueTypeChoices.LIST]}, self.queryset).qs.count(), 1
+        )
+
+    def test_required(self):
+        self.assertEqual(self.filterset({"required": True}, self.queryset).qs.count(), 1)
+
+    def test_secret(self):
+        self.assertEqual(self.filterset({"secret": True}, self.queryset).qs.count(), 1)
+
+    def test_search_key(self):
+        self.assertEqual(self.filterset({"q": "db_index"}, self.queryset).qs.count(), 1)
 
 
 class ServiceInstanceFilterTest(TestCase):

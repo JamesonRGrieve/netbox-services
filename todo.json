@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "domain": "services.netbox_plugin",
+  "title": "netbox-services plugin",
+  "description": "Native NetBox SoT for application install-data + service integrations (catalog, instances, edges, HA) — DESIGN.md Phase B.",
+  "phases": [
+    {
+      "number": 1,
+      "title": "Plugin models + plumbing",
+      "exit_criteria": "All models have REST API + filtersets + forms + tables + navigation + views + hand-authored migration + no-mock tests; makemigrations --check clean; test suite green.",
+      "items": [
+        {
+          "number": "1.1",
+          "feature": "Catalog + instance + edge + HA models",
+          "description": "ServiceCatalog(+CatalogCredential/Token/SecondaryPort/IntegrationCatalog/TestState/TestIntegration), ServiceInstance(+InstanceOpenBaoPath), Integration, HAMirror with cardinality validation.",
+          "sot": "NB",
+          "done": true
+        },
+        {
+          "number": "1.2",
+          "feature": "Per-edge integration config params as SoT",
+          "description": "IntegrationCatalogParam (catalog-level typed schema: key/value_type/required/default/secret) + IntegrationParam (instance-level store-on-override value on one Integration edge). Moves the per-edge params from inline integrate_*.yml (SSO redirect URIs/scopes/claims, cache db-index, S3 bucket/prefix, SMTP from-address) into NetBox. clean() validates declared-key, value_type parse, required-completeness, and the secret_ref/OpenBao-path boundary (no inline secret values). Mirrors the catalog-declares/instance-values split used for tokens & ports. Migration 0002_integration_params.",
+          "sot": "NB",
+          "done": true
+        }
+      ]
+    }
+  ]
+}

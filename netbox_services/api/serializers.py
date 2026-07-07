@@ -13,7 +13,8 @@ from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from ..models import (
     CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
 )
 
 _META = ["tags", "custom_fields", "created", "last_updated"]
@@ -76,6 +77,19 @@ class IntegrationCatalogSerializer(NetBoxModelSerializer):
             "playbook", "description", "provider_scope", "consumer_max", *_META,
         ]
         brief_fields = ["id", "url", "display", "type", "requires_service"]
+
+
+class IntegrationCatalogParamSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:integrationcatalogparam-detail")
+    integration_catalog = IntegrationCatalogSerializer(nested=True)
+
+    class Meta:
+        model = IntegrationCatalogParam
+        fields = [
+            "id", "url", "display", "integration_catalog", "key", "value_type", "required",
+            "default", "secret", "description", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "key", "value_type"]
 
 
 class CatalogTestStateSerializer(NetBoxModelSerializer):
@@ -162,6 +176,16 @@ class IntegrationSerializer(NetBoxModelSerializer):
         model = Integration
         fields = ["id", "url", "display", "consumer", "provider", "type", "requires_tokens", "description", *_META]
         brief_fields = ["id", "url", "display", "type"]
+
+
+class IntegrationParamSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:integrationparam-detail")
+    integration = IntegrationSerializer(nested=True)
+
+    class Meta:
+        model = IntegrationParam
+        fields = ["id", "url", "display", "integration", "key", "value", *_META]
+        brief_fields = ["id", "url", "display", "key"]
 
 
 class HAMirrorSerializer(NetBoxModelSerializer):
