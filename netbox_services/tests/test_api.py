@@ -2,6 +2,8 @@
 """REST API CRUD tests against a real DB + real API client (no mocks). Composes the explicit CRUD
 mixins (no GraphQL type yet). Integration create_data is kept within the cardinality rules (shared,
 unbounded provider) so the pre_save backstop accepts every created edge."""
+import unittest
+
 from django.urls import reverse
 from utilities.testing import APIViewTestCases, create_test_device
 from ..choices import IntegrationParamValueTypeChoices
@@ -20,7 +22,16 @@ class _CRUD(
     APIViewTestCases.UpdateObjectViewTestCase,
     APIViewTestCases.DeleteObjectViewTestCase,
 ):
-    pass
+    # Plugin API views register under the `plugins-api:<app_label>-api` namespace;
+    # without this override the test base reverses `<app_label>-api:…` (no
+    # `plugins-api` prefix) → NoReverseMatch. See utilities/testing/api.py.
+    view_namespace = "plugins-api:netbox_services"
+
+    @classmethod
+    def setUpClass(cls):
+        if cls is _CRUD:
+            raise unittest.SkipTest("abstract API test base")
+        super().setUpClass()
 
 
 class ServiceCatalogAPITest(_CRUD):
