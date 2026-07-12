@@ -6,11 +6,13 @@ from ..choices import (
     ServiceInstanceStatusChoices,
 )
 from ..filtersets import (
-    IntegrationCatalogFilterSet, IntegrationCatalogParamFilterSet, IntegrationFilterSet,
-    ServiceCatalogFilterSet, ServiceInstanceFilterSet,
+    CatalogConfigParamFilterSet, IntegrationCatalogFilterSet, IntegrationCatalogParamFilterSet,
+    IntegrationFilterSet, ServiceCatalogFilterSet, ServiceInstanceConfigValueFilterSet,
+    ServiceInstanceFilterSet,
 )
 from ..models import (
-    Integration, IntegrationCatalog, IntegrationCatalogParam, ServiceCatalog, ServiceInstance,
+    CatalogConfigParam, Integration, IntegrationCatalog, IntegrationCatalogParam, ServiceCatalog,
+    ServiceInstance, ServiceInstanceConfigValue,
 )
 from .utils import make_catalog, make_instance
 
@@ -103,6 +105,67 @@ class IntegrationCatalogParamFilterTest(TestCase):
 
     def test_search_key(self):
         self.assertEqual(self.filterset({"q": "db_index"}, self.queryset).qs.count(), 1)
+
+
+class CatalogConfigParamFilterTest(TestCase):
+    queryset = CatalogConfigParam.objects.all()
+    filterset = CatalogConfigParamFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.cat = make_catalog("forgejo")
+        CatalogConfigParam.objects.create(
+            catalog=cls.cat, key="workers", value_type=IntegrationParamValueTypeChoices.INT,
+            provider_attr="forgejo_service.workers",
+        )
+        CatalogConfigParam.objects.create(
+            catalog=cls.cat, key="allowed_hosts", value_type=IntegrationParamValueTypeChoices.LIST,
+            required=True,
+        )
+        CatalogConfigParam.objects.create(
+            catalog=cls.cat, key="smtp_password",
+            value_type=IntegrationParamValueTypeChoices.SECRET_REF, secret=True,
+        )
+
+    def test_catalog_by_name(self):
+        self.assertEqual(self.filterset({"catalog": ["forgejo"]}, self.queryset).qs.count(), 3)
+
+    def test_value_type(self):
+        self.assertEqual(
+            self.filterset({"value_type": [IntegrationParamValueTypeChoices.LIST]}, self.queryset).qs.count(), 1
+        )
+
+    def test_required(self):
+        self.assertEqual(self.filterset({"required": True}, self.queryset).qs.count(), 1)
+
+    def test_secret(self):
+        self.assertEqual(self.filterset({"secret": True}, self.queryset).qs.count(), 1)
+
+    def test_search_provider_attr(self):
+        self.assertEqual(self.filterset({"q": "forgejo_service"}, self.queryset).qs.count(), 1)
+
+
+class ServiceInstanceConfigValueFilterTest(TestCase):
+    queryset = ServiceInstanceConfigValue.objects.all()
+    filterset = ServiceInstanceConfigValueFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        cat = make_catalog("forgejo")
+        cls.param = CatalogConfigParam.objects.create(
+            catalog=cat, key="workers", value_type=IntegrationParamValueTypeChoices.INT,
+        )
+        cls.instance = make_instance(cat, hostname="forgejo")
+        ServiceInstanceConfigValue.objects.create(instance=cls.instance, param=cls.param, value="8")
+
+    def test_instance_id(self):
+        self.assertEqual(self.filterset({"instance_id": [self.instance.pk]}, self.queryset).qs.count(), 1)
+
+    def test_param_id(self):
+        self.assertEqual(self.filterset({"param_id": [self.param.pk]}, self.queryset).qs.count(), 1)
+
+    def test_search_param_key(self):
+        self.assertEqual(self.filterset({"q": "workers"}, self.queryset).qs.count(), 1)
 
 
 class ServiceInstanceFilterTest(TestCase):

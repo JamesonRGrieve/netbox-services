@@ -2,15 +2,17 @@
 from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
 from ..models import (
-    CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
-    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
+    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    ServiceInstanceConfigValue,
 )
 from .serializers import (
-    CatalogCredentialSerializer, CatalogSecondaryPortSerializer, CatalogTestIntegrationSerializer,
-    CatalogTestStateSerializer, CatalogTokenSerializer, HAMirrorSerializer, IntegrationCatalogParamSerializer,
-    IntegrationCatalogSerializer, IntegrationParamSerializer, IntegrationSerializer,
-    InstanceOpenBaoPathSerializer, ServiceCatalogSerializer, ServiceInstanceSerializer,
+    CatalogConfigParamSerializer, CatalogCredentialSerializer, CatalogSecondaryPortSerializer,
+    CatalogTestIntegrationSerializer, CatalogTestStateSerializer, CatalogTokenSerializer,
+    HAMirrorSerializer, IntegrationCatalogParamSerializer, IntegrationCatalogSerializer,
+    IntegrationParamSerializer, IntegrationSerializer, InstanceOpenBaoPathSerializer,
+    ServiceCatalogSerializer, ServiceInstanceConfigValueSerializer, ServiceInstanceSerializer,
 )
 
 
@@ -50,6 +52,12 @@ class IntegrationCatalogParamViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.IntegrationCatalogParamFilterSet
 
 
+class CatalogConfigParamViewSet(NetBoxModelViewSet):
+    queryset = CatalogConfigParam.objects.prefetch_related("catalog", "tags")
+    serializer_class = CatalogConfigParamSerializer
+    filterset_class = filtersets.CatalogConfigParamFilterSet
+
+
 class CatalogTestStateViewSet(NetBoxModelViewSet):
     queryset = CatalogTestState.objects.prefetch_related("catalog", "tags")
     serializer_class = CatalogTestStateSerializer
@@ -72,6 +80,12 @@ class InstanceOpenBaoPathViewSet(NetBoxModelViewSet):
     queryset = InstanceOpenBaoPath.objects.prefetch_related("instance", "tags")
     serializer_class = InstanceOpenBaoPathSerializer
     filterset_class = filtersets.InstanceOpenBaoPathFilterSet
+
+
+class ServiceInstanceConfigValueViewSet(NetBoxModelViewSet):
+    queryset = ServiceInstanceConfigValue.objects.prefetch_related("instance", "param", "tags")
+    serializer_class = ServiceInstanceConfigValueSerializer
+    filterset_class = filtersets.ServiceInstanceConfigValueFilterSet
 
 
 class IntegrationViewSet(NetBoxModelViewSet):

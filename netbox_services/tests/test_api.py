@@ -8,9 +8,10 @@ from django.urls import reverse
 from utilities.testing import APIViewTestCases, create_test_device
 from ..choices import IntegrationParamValueTypeChoices
 from ..models import (
-    CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
-    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
+    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    ServiceInstanceConfigValue,
 )
 from .utils import make_catalog, make_instance, make_vm
 
@@ -144,6 +145,27 @@ class IntegrationCatalogParamAPITest(_CRUD):
         ]
 
 
+class CatalogConfigParamAPITest(_CRUD):
+    model = CatalogConfigParam
+    brief_fields = ["display", "id", "key", "url", "value_type"]
+    bulk_update_data = {"required": True}
+
+    @classmethod
+    def setUpTestData(cls):
+        cat = make_catalog("forgejo")
+        CatalogConfigParam.objects.bulk_create([
+            CatalogConfigParam(catalog=cat, key=f"k{i}",
+                               value_type=IntegrationParamValueTypeChoices.STRING)
+            for i in range(3)
+        ])
+        cls.create_data = [
+            {"catalog": cat.pk, "key": "workers", "value_type": "int", "default": "4",
+             "provider_attr": "forgejo_service.workers"},
+            {"catalog": cat.pk, "key": "allowed_hosts", "value_type": "list", "required": True},
+            {"catalog": cat.pk, "key": "smtp_password", "value_type": "secret_ref", "secret": True},
+        ]
+
+
 class CatalogTestStateAPITest(_CRUD):
     model = CatalogTestState
     brief_fields = ["display", "distro", "id", "url"]
@@ -233,6 +255,33 @@ class InstanceOpenBaoPathAPITest(_CRUD):
             {"instance": inst.pk, "key": "admin_pass", "path": "secret/data/authentik/admin"},
             {"instance": inst.pk, "key": "db_pass", "path": "secret/data/authentik/db"},
             {"instance": inst.pk, "key": "api_token", "path": "secret/data/authentik/api"},
+        ]
+
+
+class ServiceInstanceConfigValueAPITest(_CRUD):
+    model = ServiceInstanceConfigValue
+    brief_fields = ["display", "id", "param", "url", "value"]
+    bulk_update_data = {"value": "changed"}
+
+    @classmethod
+    def setUpTestData(cls):
+        cat = make_catalog("forgejo")
+        # STRING params so every created/updated value parses; distinct params so (instance, param)
+        # stays unique. API create runs full_clean(), so each param must belong to the instance's type.
+        params = [
+            CatalogConfigParam.objects.create(
+                catalog=cat, key=f"k{i}", value_type=IntegrationParamValueTypeChoices.STRING
+            )
+            for i in range(6)
+        ]
+        inst = make_instance(cat, hostname="forgejo")
+        ServiceInstanceConfigValue.objects.bulk_create([
+            ServiceInstanceConfigValue(instance=inst, param=params[i], value="v") for i in range(3)
+        ])
+        cls.create_data = [
+            {"instance": inst.pk, "param": params[3].pk, "value": "listen"},
+            {"instance": inst.pk, "param": params[4].pk, "value": "web"},
+            {"instance": inst.pk, "param": params[5].pk, "value": "app"},
         ]
 
 

@@ -153,6 +153,31 @@ class IntegrationCatalogParamBulkDeleteView(generic.BulkDeleteView):
     table = tables.IntegrationCatalogParamTable
 
 
+class CatalogConfigParamView(generic.ObjectView):
+    queryset = models.CatalogConfigParam.objects.all()
+
+
+class CatalogConfigParamListView(generic.ObjectListView):
+    queryset = models.CatalogConfigParam.objects.all()
+    table = tables.CatalogConfigParamTable
+    filterset = filtersets.CatalogConfigParamFilterSet
+    filterset_form = forms.CatalogConfigParamFilterForm
+
+
+class CatalogConfigParamEditView(generic.ObjectEditView):
+    queryset = models.CatalogConfigParam.objects.all()
+    form = forms.CatalogConfigParamForm
+
+
+class CatalogConfigParamDeleteView(generic.ObjectDeleteView):
+    queryset = models.CatalogConfigParam.objects.all()
+
+
+class CatalogConfigParamBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.CatalogConfigParam.objects.all()
+    table = tables.CatalogConfigParamTable
+
+
 class CatalogTestStateView(generic.ObjectView):
     queryset = models.CatalogTestState.objects.all()
 
@@ -251,6 +276,31 @@ class InstanceOpenBaoPathDeleteView(generic.ObjectDeleteView):
 class InstanceOpenBaoPathBulkDeleteView(generic.BulkDeleteView):
     queryset = models.InstanceOpenBaoPath.objects.all()
     table = tables.InstanceOpenBaoPathTable
+
+
+class ServiceInstanceConfigValueView(generic.ObjectView):
+    queryset = models.ServiceInstanceConfigValue.objects.all()
+
+
+class ServiceInstanceConfigValueListView(generic.ObjectListView):
+    queryset = models.ServiceInstanceConfigValue.objects.all()
+    table = tables.ServiceInstanceConfigValueTable
+    filterset = filtersets.ServiceInstanceConfigValueFilterSet
+    filterset_form = forms.ServiceInstanceConfigValueFilterForm
+
+
+class ServiceInstanceConfigValueEditView(generic.ObjectEditView):
+    queryset = models.ServiceInstanceConfigValue.objects.all()
+    form = forms.ServiceInstanceConfigValueForm
+
+
+class ServiceInstanceConfigValueDeleteView(generic.ObjectDeleteView):
+    queryset = models.ServiceInstanceConfigValue.objects.all()
+
+
+class ServiceInstanceConfigValueBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.ServiceInstanceConfigValue.objects.all()
+    table = tables.ServiceInstanceConfigValueTable
 
 
 class IntegrationView(generic.ObjectView):

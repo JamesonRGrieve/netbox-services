@@ -13,8 +13,9 @@ from ..choices import (
     ServiceInstanceStatusChoices,
 )
 from ..models import (
-    CatalogCredential, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration,
-    IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    CatalogConfigParam, CatalogCredential, CatalogTestIntegration, CatalogTestState, CatalogToken,
+    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    ServiceInstanceConfigValue,
 )
 from .utils import make_catalog, make_instance, make_vm
 
@@ -237,6 +238,101 @@ class IntegrationParamModelTest(TestCase):
         param = IntegrationParam.objects.create(integration=self.edge, key="scopes", value=value)
         param.refresh_from_db()
         self.assertEqual(param.value.split("\n"), ["openid", "profile", "email", "groups"])
+
+
+class CatalogConfigParamModelTest(TestCase):
+    """CatalogConfigParam (the service-config schema) + ServiceInstanceConfigValue (the per-instance
+    override): str/url, uniqueness/cascade, the typed-value contract, the secret ⇒ path rule, and
+    the cross-type guard (a value may only reference a param of the instance's own service type)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.forgejo = make_catalog("forgejo")
+        cls.p_int = CatalogConfigParam.objects.create(
+            catalog=cls.forgejo, key="workers", value_type=IntegrationParamValueTypeChoices.INT,
+            default="4", provider_attr="forgejo_service.workers",
+        )
+        cls.p_list = CatalogConfigParam.objects.create(
+            catalog=cls.forgejo, key="allowed_hosts", value_type=IntegrationParamValueTypeChoices.LIST,
+        )
+        cls.p_url = CatalogConfigParam.objects.create(
+            catalog=cls.forgejo, key="root_url", value_type=IntegrationParamValueTypeChoices.URL,
+        )
+        cls.p_bool = CatalogConfigParam.objects.create(
+            catalog=cls.forgejo, key="registration_open", value_type=IntegrationParamValueTypeChoices.BOOL,
+        )
+        cls.p_secret = CatalogConfigParam.objects.create(
+            catalog=cls.forgejo, key="smtp_password",
+            value_type=IntegrationParamValueTypeChoices.SECRET_REF, secret=True,
+        )
+        cls.instance = make_instance(cls.forgejo, hostname="forgejo")
+
+    def test_catalog_param_str_url(self):
+        self.assertIn("workers", str(self.p_int))
+        self.assertIn("/plugins/services/catalog-config-params/", self.p_int.get_absolute_url())
+
+    def test_catalog_param_unique_and_cascade(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CatalogConfigParam.objects.create(
+                catalog=self.forgejo, key="workers", value_type=IntegrationParamValueTypeChoices.INT,
+            )
+        other = make_catalog("openbao")
+        p = CatalogConfigParam.objects.create(
+            catalog=other, key="listen_addr", value_type=IntegrationParamValueTypeChoices.STRING,
+        )
+        other.delete()
+        self.assertFalse(CatalogConfigParam.objects.filter(pk=p.pk).exists())
+
+    def test_instance_override_valid(self):
+        cv = ServiceInstanceConfigValue(instance=self.instance, param=self.p_int, value="8")
+        cv.full_clean()
+        cv.save()
+        self.assertIn("workers", str(cv))
+        self.assertIn("/plugins/services/instance-config-values/", cv.get_absolute_url())
+
+    def test_instance_value_unique_and_cascade(self):
+        ServiceInstanceConfigValue.objects.create(instance=self.instance, param=self.p_int, value="6")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ServiceInstanceConfigValue(instance=self.instance, param=self.p_int, value="7").save()
+        self.p_int.delete()
+        self.assertEqual(ServiceInstanceConfigValue.objects.filter(param=self.p_int.pk).count(), 0)
+
+    def test_reject_bad_int(self):
+        with self.assertRaises(ValidationError):
+            ServiceInstanceConfigValue(instance=self.instance, param=self.p_int, value="lots").full_clean()
+
+    def test_reject_bad_bool(self):
+        with self.assertRaises(ValidationError):
+            ServiceInstanceConfigValue(instance=self.instance, param=self.p_bool, value="maybe").full_clean()
+        ServiceInstanceConfigValue(instance=self.instance, param=self.p_bool, value="true").full_clean()
+
+    def test_reject_bad_url(self):
+        with self.assertRaises(ValidationError):
+            ServiceInstanceConfigValue(instance=self.instance, param=self.p_url, value="not a url").full_clean()
+        ServiceInstanceConfigValue(instance=self.instance, param=self.p_url, value="https://forgejo.example/").full_clean()
+
+    def test_reject_inline_secret(self):
+        for inline in ("https://example.com/token", "user@example.com", "literaltoken"):
+            with self.assertRaises(ValidationError):
+                ServiceInstanceConfigValue(instance=self.instance, param=self.p_secret, value=inline).full_clean()
+        ServiceInstanceConfigValue(
+            instance=self.instance, param=self.p_secret, value="secret/data/forgejo/smtp"
+        ).full_clean()
+
+    def test_reject_cross_type_param(self):
+        # A value may only reference a config param declared on the instance's own service type.
+        openbao = make_catalog("openbao")
+        foreign = CatalogConfigParam.objects.create(
+            catalog=openbao, key="listen_addr", value_type=IntegrationParamValueTypeChoices.STRING,
+        )
+        with self.assertRaises(ValidationError):
+            ServiceInstanceConfigValue(instance=self.instance, param=foreign, value="0.0.0.0").full_clean()
+
+    def test_list_order_round_trips(self):
+        value = "forgejo.example\ngit.example\nlocalhost"
+        cv = ServiceInstanceConfigValue.objects.create(instance=self.instance, param=self.p_list, value=value)
+        cv.refresh_from_db()
+        self.assertEqual(cv.value.split("\n"), ["forgejo.example", "git.example", "localhost"])
 
 
 class HAMirrorModelTest(TestCase):

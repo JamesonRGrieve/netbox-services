@@ -12,9 +12,10 @@ from netbox.api.fields import ContentTypeField, SerializedPKRelatedField
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from ..models import (
-    CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
-    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
+    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    ServiceInstanceConfigValue,
 )
 
 _META = ["tags", "custom_fields", "created", "last_updated"]
@@ -88,6 +89,19 @@ class IntegrationCatalogParamSerializer(NetBoxModelSerializer):
         fields = [
             "id", "url", "display", "integration_catalog", "key", "value_type", "required",
             "default", "secret", "description", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "key", "value_type"]
+
+
+class CatalogConfigParamSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:catalogconfigparam-detail")
+    catalog = ServiceCatalogSerializer(nested=True)
+
+    class Meta:
+        model = CatalogConfigParam
+        fields = [
+            "id", "url", "display", "catalog", "key", "value_type", "required", "default", "secret",
+            "provider_attr", "description", *_META,
         ]
         brief_fields = ["id", "url", "display", "key", "value_type"]
 
@@ -186,6 +200,17 @@ class IntegrationParamSerializer(NetBoxModelSerializer):
         model = IntegrationParam
         fields = ["id", "url", "display", "integration", "key", "value", *_META]
         brief_fields = ["id", "url", "display", "key"]
+
+
+class ServiceInstanceConfigValueSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:serviceinstanceconfigvalue-detail")
+    instance = ServiceInstanceSerializer(nested=True)
+    param = CatalogConfigParamSerializer(nested=True)
+
+    class Meta:
+        model = ServiceInstanceConfigValue
+        fields = ["id", "url", "display", "instance", "param", "value", *_META]
+        brief_fields = ["id", "url", "display", "param", "value"]
 
 
 class HAMirrorSerializer(NetBoxModelSerializer):

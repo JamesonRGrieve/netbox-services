@@ -10,9 +10,10 @@ from .choices import (
     ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
-    CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
-    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
+    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    ServiceInstanceConfigValue,
 )
 
 
@@ -105,6 +106,19 @@ class IntegrationCatalogParamFilterSet(NetBoxModelFilterSet):
         return queryset.filter(Q(key__icontains=value) | Q(description__icontains=value))
 
 
+class CatalogConfigParamFilterSet(_CatalogChildFilterMixin):
+    value_type = django_filters.MultipleChoiceFilter(choices=IntegrationParamValueTypeChoices)
+
+    class Meta:
+        model = CatalogConfigParam
+        fields = ["id", "key", "value_type", "required", "secret", "provider_attr"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(
+            Q(key__icontains=value) | Q(description__icontains=value) | Q(provider_attr__icontains=value)
+        )
+
+
 class CatalogTestStateFilterSet(_CatalogChildFilterMixin):
     distro = django_filters.MultipleChoiceFilter(choices=DistroChoices)
 
@@ -183,6 +197,19 @@ class IntegrationParamFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(key__icontains=value) | Q(value__icontains=value))
+
+
+class ServiceInstanceConfigValueFilterSet(_InstanceChildFilterMixin):
+    param_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="param", queryset=CatalogConfigParam.objects.all(), label="Config Param (ID)"
+    )
+
+    class Meta:
+        model = ServiceInstanceConfigValue
+        fields = ["id", "value"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(value__icontains=value) | Q(param__key__icontains=value))
 
 
 class HAMirrorFilterSet(NetBoxModelFilterSet):

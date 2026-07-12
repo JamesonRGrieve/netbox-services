@@ -2,9 +2,10 @@
 import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 from .models import (
-    CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
-    InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
+    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
+    ServiceInstanceConfigValue,
 )
 
 
@@ -93,6 +94,21 @@ class IntegrationParamTable(NetBoxTable):
         default_columns = ("integration", "key", "value")
 
 
+class CatalogConfigParamTable(NetBoxTable):
+    catalog = tables.Column(linkify=True)
+    key = tables.Column(linkify=True)
+    value_type = columns.ChoiceFieldColumn()
+    required = columns.BooleanColumn()
+    secret = columns.BooleanColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:catalogconfigparam_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = CatalogConfigParam
+        fields = ("pk", "id", "catalog", "key", "value_type", "required", "default", "secret",
+                  "provider_attr", "description", "tags", "created", "last_updated")
+        default_columns = ("catalog", "key", "value_type", "required", "secret", "provider_attr")
+
+
 class CatalogTestStateTable(NetBoxTable):
     catalog = tables.Column(linkify=True)
     distro = columns.ChoiceFieldColumn()
@@ -143,6 +159,17 @@ class InstanceOpenBaoPathTable(NetBoxTable):
         model = InstanceOpenBaoPath
         fields = ("pk", "id", "instance", "key", "path", "tags", "created", "last_updated")
         default_columns = ("instance", "key", "path")
+
+
+class ServiceInstanceConfigValueTable(NetBoxTable):
+    instance = tables.Column(linkify=True)
+    param = tables.Column(linkify=True)
+    tags = columns.TagColumn(url_name="plugins:netbox_services:serviceinstanceconfigvalue_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = ServiceInstanceConfigValue
+        fields = ("pk", "id", "instance", "param", "value", "tags", "created", "last_updated")
+        default_columns = ("instance", "param", "value")
 
 
 class IntegrationTable(NetBoxTable):

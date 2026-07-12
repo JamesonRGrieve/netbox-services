@@ -254,6 +254,55 @@ class IntegrationCatalogParam(NetBoxModel):
         return IntegrationParamValueTypeChoices.colors.get(self.value_type)
 
 
+class CatalogConfigParam(NetBoxModel):
+    """A declarative config attribute a service *type* accepts (the typed schema for the service's
+    OWN source-of-truthable config — listen address, worker count, feature flags, an admin email,
+    a secret_ref for an API key, …). This is the service-config analogue of
+    :class:`IntegrationCatalogParam` (which types the per-*edge* integration params); it types the
+    per-*instance* values stored in :class:`ServiceInstanceConfigValue`. ``default`` is the catalog
+    default — an instance stores a row **only when it overrides** this (or for a required param with
+    no default). ``secret`` ⇒ the value is a ``secret_ref`` (OpenBao path), never an inline value.
+    ``provider_attr`` is the ``resource.attribute`` the in-house ``tofu-services`` provider maps this
+    param onto. ``value_type`` reuses :class:`IntegrationParamValueTypeChoices` — the same
+    typed-value domain (string / int / bool / url / list / secret_ref)."""
+
+    catalog = models.ForeignKey(ServiceCatalog, on_delete=models.CASCADE, related_name="config_params")
+    key = models.CharField(max_length=100, help_text="Config attribute key (e.g. listen_addr, workers, admin_email).")
+    value_type = models.CharField(max_length=16, choices=IntegrationParamValueTypeChoices)
+    required = models.BooleanField(default=False)
+    default = models.CharField(
+        max_length=255, blank=True,
+        help_text="Catalog default; an instance stores a row only when it overrides this.",
+    )
+    secret = models.BooleanField(
+        default=False, help_text="When set, the value is a secret_ref (OpenBao path), never an inline value."
+    )
+    provider_attr = models.CharField(
+        max_length=200, blank=True,
+        help_text="The resource.attribute the tofu-services provider maps this param onto.",
+    )
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["catalog", "key"]
+        verbose_name = "Catalog Config Param"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["catalog", "key"],
+                name="netbox_services_catalogconfigparam_unique_catalog_key",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.catalog.name}: {self.key}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:catalogconfigparam", args=[self.pk])
+
+    def get_value_type_color(self):
+        return IntegrationParamValueTypeChoices.colors.get(self.value_type)
+
+
 class CatalogTestState(NetBoxModel):
     """Harness test result for a (catalog, distro): which lifecycle stages passed + telemetry. The
     harness (a Semaphore job) writes this back; it is the home of today's about.json ``state{}``."""
@@ -568,6 +617,59 @@ class IntegrationParam(NetBoxModel):
     def clean(self):
         super().clean()
         validate_integration_param(self)
+
+
+def validate_service_instance_config_value(config_value):
+    """Validate a :class:`ServiceInstanceConfigValue`. The referenced :class:`CatalogConfigParam`
+    must belong to the **instance's own service type** (an instance may only override config params
+    declared on its catalog), and its ``value`` must satisfy the param's typed contract via
+    :func:`validate_integration_param_value` (the shared typed-value validator: ``int`` parses,
+    ``bool`` is true/false, ``url`` has a scheme + host, a ``secret`` param must be an OpenBao path
+    reference — never an inline value)."""
+    if not (config_value.instance_id and config_value.param_id):
+        return
+    if config_value.param.catalog_id != config_value.instance.catalog_id:
+        raise ValidationError(
+            f"Config param '{config_value.param.key}' belongs to {config_value.param.catalog.name}, "
+            f"not the instance's service type {config_value.instance.catalog.name}."
+        )
+    validate_integration_param_value(config_value.param, config_value.value)
+
+
+class ServiceInstanceConfigValue(NetBoxModel):
+    """A per-instance override of ONE of a service type's declarative config attributes — the
+    instance-level SoT for the parameters typed by :class:`CatalogConfigParam`. Stored **only on
+    override** of the catalog default (or for a required param with no default); the provider merges
+    catalog defaults with these rows for the effective config. ``value`` is rendered per the linked
+    :class:`CatalogConfigParam`'s ``value_type`` (``list`` = newline-delimited, order preserved;
+    a ``secret`` param = OpenBao path reference, never the secret value). This is the service-config
+    analogue of :class:`IntegrationParam` (the per-edge override)."""
+
+    instance = models.ForeignKey(ServiceInstance, on_delete=models.CASCADE, related_name="config_values")
+    param = models.ForeignKey(CatalogConfigParam, on_delete=models.CASCADE, related_name="instance_values")
+    value = models.CharField(
+        max_length=255, help_text="Rendered per value_type (list = newline-delimited; secret = OpenBao path)."
+    )
+
+    class Meta:
+        ordering = ["instance", "param"]
+        verbose_name = "Service Instance Config Value"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["instance", "param"],
+                name="netbox_services_serviceinstanceconfigvalue_unique_instance_param",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.instance}: {self.param.key}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:serviceinstanceconfigvalue", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        validate_service_instance_config_value(self)
 
 
 class HAMirror(NetBoxModel):

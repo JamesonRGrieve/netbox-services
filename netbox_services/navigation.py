@@ -22,6 +22,7 @@ menu = PluginMenu(
                 _item("catalogsecondaryport", "Secondary Ports"),
                 _item("integrationcatalog", "Integration Catalog"),
                 _item("integrationcatalogparam", "Integration Catalog Params"),
+                _item("catalogconfigparam", "Config Params"),
             ),
         ),
         (
@@ -36,6 +37,7 @@ menu = PluginMenu(
             (
                 _item("serviceinstance", "Service Instances"),
                 _item("instanceopenbaopath", "OpenBao Paths"),
+                _item("serviceinstanceconfigvalue", "Config Values"),
             ),
         ),
         (
