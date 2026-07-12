@@ -6,12 +6,12 @@ import unittest
 
 from django.urls import reverse
 from utilities.testing import APIViewTestCases, create_test_device
-from ..choices import IntegrationParamValueTypeChoices
+from ..choices import ExtensionKindChoices, IntegrationParamValueTypeChoices
 from ..models import (
-    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
-    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue,
+    ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 from .utils import make_catalog, make_instance, make_vm
 
@@ -166,6 +166,25 @@ class CatalogConfigParamAPITest(_CRUD):
         ]
 
 
+class CatalogExtensionAPITest(_CRUD):
+    model = CatalogExtension
+    brief_fields = ["display", "id", "kind", "name", "url"]
+    bulk_update_data = {"required": True}
+
+    @classmethod
+    def setUpTestData(cls):
+        cat = make_catalog("wordpress")
+        CatalogExtension.objects.bulk_create([
+            CatalogExtension(catalog=cat, kind=ExtensionKindChoices.PLUGIN, name=f"plugin{i}")
+            for i in range(3)
+        ])
+        cls.create_data = [
+            {"catalog": cat.pk, "kind": "plugin", "name": "akismet", "default_version": "5.3", "required": True},
+            {"catalog": cat.pk, "kind": "theme", "name": "twentytwentyfour"},
+            {"catalog": cat.pk, "kind": "app", "name": "multisite"},
+        ]
+
+
 class CatalogTestStateAPITest(_CRUD):
     model = CatalogTestState
     brief_fields = ["display", "distro", "id", "url"]
@@ -282,6 +301,25 @@ class ServiceInstanceConfigValueAPITest(_CRUD):
             {"instance": inst.pk, "param": params[3].pk, "value": "listen"},
             {"instance": inst.pk, "param": params[4].pk, "value": "web"},
             {"instance": inst.pk, "param": params[5].pk, "value": "app"},
+        ]
+
+
+class ServiceInstanceExtensionAPITest(_CRUD):
+    model = ServiceInstanceExtension
+    brief_fields = ["display", "id", "kind", "name", "url"]
+    bulk_update_data = {"enabled": False}
+
+    @classmethod
+    def setUpTestData(cls):
+        inst = make_instance(make_catalog("wordpress"), hostname="wp")
+        ServiceInstanceExtension.objects.bulk_create([
+            ServiceInstanceExtension(instance=inst, kind=ExtensionKindChoices.PLUGIN, name=f"plugin{i}")
+            for i in range(3)
+        ])
+        cls.create_data = [
+            {"instance": inst.pk, "kind": "plugin", "name": "akismet", "version": "5.3"},
+            {"instance": inst.pk, "kind": "plugin", "name": "woocommerce", "enabled": False},
+            {"instance": inst.pk, "kind": "theme", "name": "twentytwentyfour", "managed": False},
         ]
 
 

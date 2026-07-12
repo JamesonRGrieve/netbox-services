@@ -25,8 +25,8 @@ from django.urls import reverse
 from ipam.choices import ServiceProtocolChoices
 from netbox.models import NetBoxModel
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
-    ProviderScopeChoices, ServiceInstanceStatusChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
+    IntegrationParamValueTypeChoices, ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 
 # Content types a ServiceInstance may be installed onto (a guest VM or a raw-OS device).
@@ -301,6 +301,42 @@ class CatalogConfigParam(NetBoxModel):
 
     def get_value_type_color(self):
         return IntegrationParamValueTypeChoices.colors.get(self.value_type)
+
+
+class CatalogExtension(NetBoxModel):
+    """A known/default extension (plugin / theme / app / module) of a service *type* — the
+    catalog-level inventory used for optional defaults + validation. ``default_version`` is the
+    version the type ships/pins by default; ``required`` marks an extension the type mandates. This
+    is only the *known* set — an instance may still declare arbitrary extensions beyond it (see
+    :class:`ServiceInstanceExtension`)."""
+
+    catalog = models.ForeignKey(ServiceCatalog, on_delete=models.CASCADE, related_name="extensions")
+    kind = models.CharField(max_length=16, choices=ExtensionKindChoices)
+    name = models.CharField(max_length=200, help_text="Extension name (e.g. akismet, twentytwentyfour).")
+    default_version = models.CharField(
+        max_length=100, blank=True, help_text="Version the type ships/pins by default (blank = latest)."
+    )
+    required = models.BooleanField(default=False, help_text="The type mandates this extension.")
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["catalog", "kind", "name"]
+        verbose_name = "Catalog Extension"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["catalog", "kind", "name"],
+                name="netbox_services_catalogextension_unique_catalog_kind_name",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.catalog.name}: {self.kind}/{self.name}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:catalogextension", args=[self.pk])
+
+    def get_kind_color(self):
+        return ExtensionKindChoices.colors.get(self.kind)
 
 
 class CatalogTestState(NetBoxModel):
@@ -670,6 +706,43 @@ class ServiceInstanceConfigValue(NetBoxModel):
     def clean(self):
         super().clean()
         validate_service_instance_config_value(self)
+
+
+class ServiceInstanceExtension(NetBoxModel):
+    """THE per-instance declared extension inventory — one row per installed plugin / theme / app /
+    module on a :class:`ServiceInstance`. Arbitrary: any extension may be installed on any instance,
+    so this deliberately does **not** FK a :class:`CatalogExtension` (the catalog set is only the
+    known/default subset). ``version`` blank ⇒ track latest; ``enabled`` toggles activation without
+    removal; ``managed`` marks whether the ``tofu-services`` provider owns this extension's
+    lifecycle (vs. an out-of-band install the SoT merely records)."""
+
+    instance = models.ForeignKey(ServiceInstance, on_delete=models.CASCADE, related_name="extensions")
+    kind = models.CharField(max_length=16, choices=ExtensionKindChoices)
+    name = models.CharField(max_length=200, help_text="Extension name (e.g. akismet, twentytwentyfour).")
+    version = models.CharField(max_length=100, blank=True, help_text="Pinned version (blank = track latest).")
+    enabled = models.BooleanField(default=True, help_text="Extension is activated on the instance.")
+    managed = models.BooleanField(
+        default=True, help_text="The tofu-services provider owns this extension's lifecycle."
+    )
+
+    class Meta:
+        ordering = ["instance", "kind", "name"]
+        verbose_name = "Service Instance Extension"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["instance", "kind", "name"],
+                name="netbox_services_serviceinstanceextension_unique_instance_kind_name",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.instance}: {self.kind}/{self.name}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:serviceinstanceextension", args=[self.pk])
+
+    def get_kind_color(self):
+        return ExtensionKindChoices.colors.get(self.kind)
 
 
 class HAMirror(NetBoxModel):

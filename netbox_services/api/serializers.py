@@ -12,10 +12,10 @@ from netbox.api.fields import ContentTypeField, SerializedPKRelatedField
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from ..models import (
-    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
-    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue,
+    ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 
 _META = ["tags", "custom_fields", "created", "last_updated"]
@@ -104,6 +104,19 @@ class CatalogConfigParamSerializer(NetBoxModelSerializer):
             "provider_attr", "description", *_META,
         ]
         brief_fields = ["id", "url", "display", "key", "value_type"]
+
+
+class CatalogExtensionSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:catalogextension-detail")
+    catalog = ServiceCatalogSerializer(nested=True)
+
+    class Meta:
+        model = CatalogExtension
+        fields = [
+            "id", "url", "display", "catalog", "kind", "name", "default_version", "required",
+            "description", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "kind", "name"]
 
 
 class CatalogTestStateSerializer(NetBoxModelSerializer):
@@ -211,6 +224,16 @@ class ServiceInstanceConfigValueSerializer(NetBoxModelSerializer):
         model = ServiceInstanceConfigValue
         fields = ["id", "url", "display", "instance", "param", "value", *_META]
         brief_fields = ["id", "url", "display", "param", "value"]
+
+
+class ServiceInstanceExtensionSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:serviceinstanceextension-detail")
+    instance = ServiceInstanceSerializer(nested=True)
+
+    class Meta:
+        model = ServiceInstanceExtension
+        fields = ["id", "url", "display", "instance", "kind", "name", "version", "enabled", "managed", *_META]
+        brief_fields = ["id", "url", "display", "kind", "name"]
 
 
 class HAMirrorSerializer(NetBoxModelSerializer):

@@ -23,6 +23,7 @@ menu = PluginMenu(
                 _item("integrationcatalog", "Integration Catalog"),
                 _item("integrationcatalogparam", "Integration Catalog Params"),
                 _item("catalogconfigparam", "Config Params"),
+                _item("catalogextension", "Extensions"),
             ),
         ),
         (
@@ -38,6 +39,7 @@ menu = PluginMenu(
                 _item("serviceinstance", "Service Instances"),
                 _item("instanceopenbaopath", "OpenBao Paths"),
                 _item("serviceinstanceconfigvalue", "Config Values"),
+                _item("serviceinstanceextension", "Extensions"),
             ),
         ),
         (

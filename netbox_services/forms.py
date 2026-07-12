@@ -11,14 +11,14 @@ from utilities.forms.fields import (
 from utilities.forms.rendering import FieldSet
 from virtualization.models import VirtualMachine
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
-    ProviderScopeChoices, ServiceInstanceStatusChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
+    IntegrationParamValueTypeChoices, ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
-    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
-    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue,
+    ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 
 
@@ -126,6 +126,28 @@ class ServiceInstanceConfigValueForm(NetBoxModelForm):
     class Meta:
         model = ServiceInstanceConfigValue
         fields = ["instance", "param", "value", "tags"]
+
+
+class CatalogExtensionForm(NetBoxModelForm):
+    catalog = DynamicModelChoiceField(queryset=ServiceCatalog.objects.all())
+    fieldsets = (
+        FieldSet("catalog", "kind", "name", "default_version", "required", "description", name="Extension"),
+    )
+
+    class Meta:
+        model = CatalogExtension
+        fields = ["catalog", "kind", "name", "default_version", "required", "description", "tags"]
+
+
+class ServiceInstanceExtensionForm(NetBoxModelForm):
+    instance = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
+    fieldsets = (
+        FieldSet("instance", "kind", "name", "version", "enabled", "managed", name="Installed extension"),
+    )
+
+    class Meta:
+        model = ServiceInstanceExtension
+        fields = ["instance", "kind", "name", "version", "enabled", "managed", "tags"]
 
 
 class CatalogTestStateForm(NetBoxModelForm):
@@ -285,6 +307,23 @@ class ServiceInstanceConfigValueFilterForm(NetBoxModelFilterSetForm):
     instance_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Instance")
     param_id = DynamicModelMultipleChoiceField(queryset=CatalogConfigParam.objects.all(), required=False, label="Config Param")
     tag = TagFilterField(ServiceInstanceConfigValue)
+
+
+class CatalogExtensionFilterForm(NetBoxModelFilterSetForm):
+    model = CatalogExtension
+    catalog_id = DynamicModelMultipleChoiceField(queryset=ServiceCatalog.objects.all(), required=False, label="Catalog")
+    kind = forms.MultipleChoiceField(choices=ExtensionKindChoices, required=False)
+    required = forms.NullBooleanField(required=False)
+    tag = TagFilterField(CatalogExtension)
+
+
+class ServiceInstanceExtensionFilterForm(NetBoxModelFilterSetForm):
+    model = ServiceInstanceExtension
+    instance_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Instance")
+    kind = forms.MultipleChoiceField(choices=ExtensionKindChoices, required=False)
+    enabled = forms.NullBooleanField(required=False)
+    managed = forms.NullBooleanField(required=False)
+    tag = TagFilterField(ServiceInstanceExtension)
 
 
 class CatalogTestStateFilterForm(NetBoxModelFilterSetForm):

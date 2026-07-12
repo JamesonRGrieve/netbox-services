@@ -61,6 +61,21 @@ class DatabaseTypeChoices(ChoiceSet):
     ]
 
 
+class ExtensionKindChoices(ChoiceSet):
+    """Kind of installable extension in a service's plugin/app inventory: a ``plugin`` (e.g. a
+    WordPress/Nextcloud plugin), a ``theme``, an ``app`` (a sub-application), or a ``module``."""
+    PLUGIN = "plugin"
+    THEME = "theme"
+    APP = "app"
+    MODULE = "module"
+    CHOICES = [
+        (PLUGIN, "Plugin", "blue"),
+        (THEME, "Theme", "purple"),
+        (APP, "App", "green"),
+        (MODULE, "Module", "cyan"),
+    ]
+
+
 class IntegrationParamValueTypeChoices(ChoiceSet):
     """Rendered type of a per-edge integration config param value. ``list`` is newline-delimited
     and order-preserving; ``secret_ref`` is an OpenBao path reference (never the secret value —

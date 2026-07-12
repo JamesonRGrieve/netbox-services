@@ -6,14 +6,14 @@ import django_filters
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
-    ProviderScopeChoices, ServiceInstanceStatusChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
+    IntegrationParamValueTypeChoices, ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
-    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
-    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue,
+    ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 
 
@@ -119,6 +119,17 @@ class CatalogConfigParamFilterSet(_CatalogChildFilterMixin):
         )
 
 
+class CatalogExtensionFilterSet(_CatalogChildFilterMixin):
+    kind = django_filters.MultipleChoiceFilter(choices=ExtensionKindChoices)
+
+    class Meta:
+        model = CatalogExtension
+        fields = ["id", "kind", "name", "default_version", "required"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+
 class CatalogTestStateFilterSet(_CatalogChildFilterMixin):
     distro = django_filters.MultipleChoiceFilter(choices=DistroChoices)
 
@@ -210,6 +221,17 @@ class ServiceInstanceConfigValueFilterSet(_InstanceChildFilterMixin):
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(value__icontains=value) | Q(param__key__icontains=value))
+
+
+class ServiceInstanceExtensionFilterSet(_InstanceChildFilterMixin):
+    kind = django_filters.MultipleChoiceFilter(choices=ExtensionKindChoices)
+
+    class Meta:
+        model = ServiceInstanceExtension
+        fields = ["id", "kind", "name", "version", "enabled", "managed"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(name__icontains=value) | Q(version__icontains=value))
 
 
 class HAMirrorFilterSet(NetBoxModelFilterSet):

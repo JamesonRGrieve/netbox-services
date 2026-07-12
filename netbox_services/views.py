@@ -178,6 +178,31 @@ class CatalogConfigParamBulkDeleteView(generic.BulkDeleteView):
     table = tables.CatalogConfigParamTable
 
 
+class CatalogExtensionView(generic.ObjectView):
+    queryset = models.CatalogExtension.objects.all()
+
+
+class CatalogExtensionListView(generic.ObjectListView):
+    queryset = models.CatalogExtension.objects.all()
+    table = tables.CatalogExtensionTable
+    filterset = filtersets.CatalogExtensionFilterSet
+    filterset_form = forms.CatalogExtensionFilterForm
+
+
+class CatalogExtensionEditView(generic.ObjectEditView):
+    queryset = models.CatalogExtension.objects.all()
+    form = forms.CatalogExtensionForm
+
+
+class CatalogExtensionDeleteView(generic.ObjectDeleteView):
+    queryset = models.CatalogExtension.objects.all()
+
+
+class CatalogExtensionBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.CatalogExtension.objects.all()
+    table = tables.CatalogExtensionTable
+
+
 class CatalogTestStateView(generic.ObjectView):
     queryset = models.CatalogTestState.objects.all()
 
@@ -301,6 +326,31 @@ class ServiceInstanceConfigValueDeleteView(generic.ObjectDeleteView):
 class ServiceInstanceConfigValueBulkDeleteView(generic.BulkDeleteView):
     queryset = models.ServiceInstanceConfigValue.objects.all()
     table = tables.ServiceInstanceConfigValueTable
+
+
+class ServiceInstanceExtensionView(generic.ObjectView):
+    queryset = models.ServiceInstanceExtension.objects.all()
+
+
+class ServiceInstanceExtensionListView(generic.ObjectListView):
+    queryset = models.ServiceInstanceExtension.objects.all()
+    table = tables.ServiceInstanceExtensionTable
+    filterset = filtersets.ServiceInstanceExtensionFilterSet
+    filterset_form = forms.ServiceInstanceExtensionFilterForm
+
+
+class ServiceInstanceExtensionEditView(generic.ObjectEditView):
+    queryset = models.ServiceInstanceExtension.objects.all()
+    form = forms.ServiceInstanceExtensionForm
+
+
+class ServiceInstanceExtensionDeleteView(generic.ObjectDeleteView):
+    queryset = models.ServiceInstanceExtension.objects.all()
+
+
+class ServiceInstanceExtensionBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.ServiceInstanceExtension.objects.all()
+    table = tables.ServiceInstanceExtensionTable
 
 
 class IntegrationView(generic.ObjectView):

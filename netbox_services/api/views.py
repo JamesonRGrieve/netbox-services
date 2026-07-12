@@ -2,17 +2,18 @@
 from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
 from ..models import (
-    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
-    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue,
+    ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 from .serializers import (
-    CatalogConfigParamSerializer, CatalogCredentialSerializer, CatalogSecondaryPortSerializer,
-    CatalogTestIntegrationSerializer, CatalogTestStateSerializer, CatalogTokenSerializer,
-    HAMirrorSerializer, IntegrationCatalogParamSerializer, IntegrationCatalogSerializer,
-    IntegrationParamSerializer, IntegrationSerializer, InstanceOpenBaoPathSerializer,
-    ServiceCatalogSerializer, ServiceInstanceConfigValueSerializer, ServiceInstanceSerializer,
+    CatalogConfigParamSerializer, CatalogCredentialSerializer, CatalogExtensionSerializer,
+    CatalogSecondaryPortSerializer, CatalogTestIntegrationSerializer, CatalogTestStateSerializer,
+    CatalogTokenSerializer, HAMirrorSerializer, IntegrationCatalogParamSerializer,
+    IntegrationCatalogSerializer, IntegrationParamSerializer, IntegrationSerializer,
+    InstanceOpenBaoPathSerializer, ServiceCatalogSerializer, ServiceInstanceConfigValueSerializer,
+    ServiceInstanceExtensionSerializer, ServiceInstanceSerializer,
 )
 
 
@@ -58,6 +59,12 @@ class CatalogConfigParamViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.CatalogConfigParamFilterSet
 
 
+class CatalogExtensionViewSet(NetBoxModelViewSet):
+    queryset = CatalogExtension.objects.prefetch_related("catalog", "tags")
+    serializer_class = CatalogExtensionSerializer
+    filterset_class = filtersets.CatalogExtensionFilterSet
+
+
 class CatalogTestStateViewSet(NetBoxModelViewSet):
     queryset = CatalogTestState.objects.prefetch_related("catalog", "tags")
     serializer_class = CatalogTestStateSerializer
@@ -86,6 +93,12 @@ class ServiceInstanceConfigValueViewSet(NetBoxModelViewSet):
     queryset = ServiceInstanceConfigValue.objects.prefetch_related("instance", "param", "tags")
     serializer_class = ServiceInstanceConfigValueSerializer
     filterset_class = filtersets.ServiceInstanceConfigValueFilterSet
+
+
+class ServiceInstanceExtensionViewSet(NetBoxModelViewSet):
+    queryset = ServiceInstanceExtension.objects.prefetch_related("instance", "tags")
+    serializer_class = ServiceInstanceExtensionSerializer
+    filterset_class = filtersets.ServiceInstanceExtensionFilterSet
 
 
 class IntegrationViewSet(NetBoxModelViewSet):

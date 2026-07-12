@@ -2,17 +2,17 @@
 """FilterSet tests against a real DB (no mocks): the explicit FK + choice filters and search."""
 from django.test import TestCase
 from ..choices import (
-    HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
+    ExtensionKindChoices, HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
     ServiceInstanceStatusChoices,
 )
 from ..filtersets import (
-    CatalogConfigParamFilterSet, IntegrationCatalogFilterSet, IntegrationCatalogParamFilterSet,
-    IntegrationFilterSet, ServiceCatalogFilterSet, ServiceInstanceConfigValueFilterSet,
-    ServiceInstanceFilterSet,
+    CatalogConfigParamFilterSet, CatalogExtensionFilterSet, IntegrationCatalogFilterSet,
+    IntegrationCatalogParamFilterSet, IntegrationFilterSet, ServiceCatalogFilterSet,
+    ServiceInstanceConfigValueFilterSet, ServiceInstanceExtensionFilterSet, ServiceInstanceFilterSet,
 )
 from ..models import (
-    CatalogConfigParam, Integration, IntegrationCatalog, IntegrationCatalogParam, ServiceCatalog,
-    ServiceInstance, ServiceInstanceConfigValue,
+    CatalogConfigParam, CatalogExtension, Integration, IntegrationCatalog, IntegrationCatalogParam,
+    ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 from .utils import make_catalog, make_instance
 
@@ -166,6 +166,72 @@ class ServiceInstanceConfigValueFilterTest(TestCase):
 
     def test_search_param_key(self):
         self.assertEqual(self.filterset({"q": "workers"}, self.queryset).qs.count(), 1)
+
+
+class CatalogExtensionFilterTest(TestCase):
+    queryset = CatalogExtension.objects.all()
+    filterset = CatalogExtensionFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.wp = make_catalog("wordpress")
+        CatalogExtension.objects.create(
+            catalog=cls.wp, kind=ExtensionKindChoices.PLUGIN, name="akismet", required=True,
+        )
+        CatalogExtension.objects.create(
+            catalog=cls.wp, kind=ExtensionKindChoices.THEME, name="twentytwentyfour",
+        )
+        CatalogExtension.objects.create(
+            catalog=cls.wp, kind=ExtensionKindChoices.PLUGIN, name="woocommerce",
+        )
+
+    def test_catalog_by_name(self):
+        self.assertEqual(self.filterset({"catalog": ["wordpress"]}, self.queryset).qs.count(), 3)
+
+    def test_kind(self):
+        self.assertEqual(
+            self.filterset({"kind": [ExtensionKindChoices.PLUGIN]}, self.queryset).qs.count(), 2
+        )
+
+    def test_required(self):
+        self.assertEqual(self.filterset({"required": True}, self.queryset).qs.count(), 1)
+
+    def test_search_name(self):
+        self.assertEqual(self.filterset({"q": "woocommerce"}, self.queryset).qs.count(), 1)
+
+
+class ServiceInstanceExtensionFilterTest(TestCase):
+    queryset = ServiceInstanceExtension.objects.all()
+    filterset = ServiceInstanceExtensionFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.instance = make_instance(make_catalog("wordpress"), hostname="wp")
+        ServiceInstanceExtension.objects.create(
+            instance=cls.instance, kind=ExtensionKindChoices.PLUGIN, name="akismet",
+            version="5.3", enabled=True, managed=True,
+        )
+        ServiceInstanceExtension.objects.create(
+            instance=cls.instance, kind=ExtensionKindChoices.PLUGIN, name="jetpack",
+            enabled=False, managed=False,
+        )
+
+    def test_instance_id(self):
+        self.assertEqual(self.filterset({"instance_id": [self.instance.pk]}, self.queryset).qs.count(), 2)
+
+    def test_kind(self):
+        self.assertEqual(
+            self.filterset({"kind": [ExtensionKindChoices.PLUGIN]}, self.queryset).qs.count(), 2
+        )
+
+    def test_enabled(self):
+        self.assertEqual(self.filterset({"enabled": True}, self.queryset).qs.count(), 1)
+
+    def test_managed(self):
+        self.assertEqual(self.filterset({"managed": False}, self.queryset).qs.count(), 1)
+
+    def test_search_name(self):
+        self.assertEqual(self.filterset({"q": "jetpack"}, self.queryset).qs.count(), 1)
 
 
 class ServiceInstanceFilterTest(TestCase):

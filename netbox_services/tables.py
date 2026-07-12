@@ -2,10 +2,10 @@
 import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 from .models import (
-    CatalogConfigParam, CatalogCredential, CatalogSecondaryPort, CatalogTestIntegration,
-    CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue,
+    ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 
 
@@ -109,6 +109,20 @@ class CatalogConfigParamTable(NetBoxTable):
         default_columns = ("catalog", "key", "value_type", "required", "secret", "provider_attr")
 
 
+class CatalogExtensionTable(NetBoxTable):
+    catalog = tables.Column(linkify=True)
+    name = tables.Column(linkify=True)
+    kind = columns.ChoiceFieldColumn()
+    required = columns.BooleanColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:catalogextension_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = CatalogExtension
+        fields = ("pk", "id", "catalog", "kind", "name", "default_version", "required", "description",
+                  "tags", "created", "last_updated")
+        default_columns = ("catalog", "kind", "name", "default_version", "required")
+
+
 class CatalogTestStateTable(NetBoxTable):
     catalog = tables.Column(linkify=True)
     distro = columns.ChoiceFieldColumn()
@@ -170,6 +184,21 @@ class ServiceInstanceConfigValueTable(NetBoxTable):
         model = ServiceInstanceConfigValue
         fields = ("pk", "id", "instance", "param", "value", "tags", "created", "last_updated")
         default_columns = ("instance", "param", "value")
+
+
+class ServiceInstanceExtensionTable(NetBoxTable):
+    instance = tables.Column(linkify=True)
+    name = tables.Column(linkify=True)
+    kind = columns.ChoiceFieldColumn()
+    enabled = columns.BooleanColumn()
+    managed = columns.BooleanColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:serviceinstanceextension_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = ServiceInstanceExtension
+        fields = ("pk", "id", "instance", "kind", "name", "version", "enabled", "managed",
+                  "tags", "created", "last_updated")
+        default_columns = ("instance", "kind", "name", "version", "enabled", "managed")
 
 
 class IntegrationTable(NetBoxTable):

@@ -9,13 +9,13 @@ from django.test import TestCase
 from ipam.models import Service
 from utilities.testing import create_test_device
 from ..choices import (
-    HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
+    ExtensionKindChoices, HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
     ServiceInstanceStatusChoices,
 )
 from ..models import (
-    CatalogConfigParam, CatalogCredential, CatalogTestIntegration, CatalogTestState, CatalogToken,
-    HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
-    ServiceInstanceConfigValue,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
+    CatalogToken, HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
+    ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 from .utils import make_catalog, make_instance, make_vm
 
@@ -333,6 +333,66 @@ class CatalogConfigParamModelTest(TestCase):
         cv = ServiceInstanceConfigValue.objects.create(instance=self.instance, param=self.p_list, value=value)
         cv.refresh_from_db()
         self.assertEqual(cv.value.split("\n"), ["forgejo.example", "git.example", "localhost"])
+
+
+class ExtensionModelTest(TestCase):
+    """CatalogExtension (the known/default extension set) + ServiceInstanceExtension (the per-instance
+    declared inventory): str/url, the (catalog|instance, kind, name) uniqueness + cascade, and that an
+    instance may declare ARBITRARY extensions (no CatalogExtension required)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.wp = make_catalog("wordpress")
+        cls.cat_ext = CatalogExtension.objects.create(
+            catalog=cls.wp, kind=ExtensionKindChoices.PLUGIN, name="akismet",
+            default_version="5.3", required=True,
+        )
+        cls.instance = make_instance(cls.wp, hostname="wp")
+
+    def test_catalog_extension_str_url_defaults(self):
+        self.assertEqual(str(self.cat_ext), "wordpress: plugin/akismet")
+        self.assertIn("/plugins/services/catalog-extensions/", self.cat_ext.get_absolute_url())
+        self.assertEqual(self.cat_ext.get_kind_color(), ExtensionKindChoices.colors.get("plugin"))
+
+    def test_catalog_extension_unique_and_cascade(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CatalogExtension.objects.create(
+                catalog=self.wp, kind=ExtensionKindChoices.PLUGIN, name="akismet",
+            )
+        # Same name under a different kind is allowed (kind is part of the key).
+        CatalogExtension.objects.create(catalog=self.wp, kind=ExtensionKindChoices.THEME, name="akismet")
+        self.wp.delete()
+        self.assertEqual(CatalogExtension.objects.count(), 0)
+
+    def test_instance_extension_str_url_and_defaults(self):
+        ext = ServiceInstanceExtension.objects.create(
+            instance=self.instance, kind=ExtensionKindChoices.PLUGIN, name="woocommerce", version="8.5",
+        )
+        self.assertEqual(str(ext), f"{self.instance}: plugin/woocommerce")
+        self.assertIn("/plugins/services/instance-extensions/", ext.get_absolute_url())
+        self.assertTrue(ext.enabled)
+        self.assertTrue(ext.managed)
+
+    def test_instance_extension_arbitrary_no_catalog_required(self):
+        # An extension with no matching CatalogExtension is still allowed (any plugin, any instance).
+        ext = ServiceInstanceExtension.objects.create(
+            instance=self.instance, kind=ExtensionKindChoices.APP, name="some-random-unlisted-app",
+            enabled=False, managed=False,
+        )
+        self.assertEqual(ext.name, "some-random-unlisted-app")
+        self.assertFalse(ext.enabled)
+        self.assertFalse(ext.managed)
+
+    def test_instance_extension_unique_and_cascade(self):
+        ServiceInstanceExtension.objects.create(
+            instance=self.instance, kind=ExtensionKindChoices.PLUGIN, name="jetpack",
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ServiceInstanceExtension(
+                instance=self.instance, kind=ExtensionKindChoices.PLUGIN, name="jetpack",
+            ).save()
+        self.instance.delete()
+        self.assertEqual(ServiceInstanceExtension.objects.count(), 0)
 
 
 class HAMirrorModelTest(TestCase):
