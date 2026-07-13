@@ -2,9 +2,9 @@
 """Shared test helpers (real objects, no mocks). ``make_vm`` builds a core virtualization VM via an
 idempotent ClusterType/Cluster (the same pattern as netbox-guests); ``make_catalog`` /
 ``make_instance`` build the plugin's own rows. A ``dcim.Device`` parent uses the framework's
-``create_test_device``."""
+``create_test_device``. ``make_role`` / ``make_assignment`` build the host-role layer."""
 from virtualization.models import Cluster, ClusterType, VirtualMachine
-from ..models import ServiceCatalog, ServiceInstance
+from ..models import HostRole, HostRoleAssignment, ServiceCatalog, ServiceInstance
 
 
 def make_vm(name, cluster_name="core"):
@@ -26,3 +26,14 @@ def make_catalog(name, **kwargs):
 def make_instance(catalog, parent=None, hostname="host", **kwargs):
     parent = parent or make_vm(f"vm-{hostname}")
     return ServiceInstance.objects.create(catalog=catalog, parent=parent, hostname=hostname, **kwargs)
+
+
+def make_role(name, **kwargs):
+    defaults = {"display_name": name.replace("_", " ").title()}
+    defaults.update(kwargs)
+    return HostRole.objects.create(name=name, **defaults)
+
+
+def make_assignment(role, target=None, **kwargs):
+    target = target or make_vm(f"vm-{role.name}")
+    return HostRoleAssignment.objects.create(role=role, target=target, **kwargs)

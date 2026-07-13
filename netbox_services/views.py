@@ -426,3 +426,103 @@ class HAMirrorDeleteView(generic.ObjectDeleteView):
 class HAMirrorBulkDeleteView(generic.BulkDeleteView):
     queryset = models.HAMirror.objects.all()
     table = tables.HAMirrorTable
+
+
+class HostRoleView(generic.ObjectView):
+    queryset = models.HostRole.objects.all()
+
+
+class HostRoleListView(generic.ObjectListView):
+    queryset = models.HostRole.objects.all()
+    table = tables.HostRoleTable
+    filterset = filtersets.HostRoleFilterSet
+    filterset_form = forms.HostRoleFilterForm
+
+
+class HostRoleEditView(generic.ObjectEditView):
+    queryset = models.HostRole.objects.all()
+    form = forms.HostRoleForm
+
+
+class HostRoleDeleteView(generic.ObjectDeleteView):
+    queryset = models.HostRole.objects.all()
+
+
+class HostRoleBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.HostRole.objects.all()
+    table = tables.HostRoleTable
+
+
+class HostRoleParamView(generic.ObjectView):
+    queryset = models.HostRoleParam.objects.all()
+
+
+class HostRoleParamListView(generic.ObjectListView):
+    queryset = models.HostRoleParam.objects.all()
+    table = tables.HostRoleParamTable
+    filterset = filtersets.HostRoleParamFilterSet
+    filterset_form = forms.HostRoleParamFilterForm
+
+
+class HostRoleParamEditView(generic.ObjectEditView):
+    queryset = models.HostRoleParam.objects.all()
+    form = forms.HostRoleParamForm
+
+
+class HostRoleParamDeleteView(generic.ObjectDeleteView):
+    queryset = models.HostRoleParam.objects.all()
+
+
+class HostRoleParamBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.HostRoleParam.objects.all()
+    table = tables.HostRoleParamTable
+
+
+class HostRoleAssignmentView(generic.ObjectView):
+    queryset = models.HostRoleAssignment.objects.all()
+
+
+class HostRoleAssignmentListView(generic.ObjectListView):
+    queryset = models.HostRoleAssignment.objects.all()
+    table = tables.HostRoleAssignmentTable
+    filterset = filtersets.HostRoleAssignmentFilterSet
+    filterset_form = forms.HostRoleAssignmentFilterForm
+
+
+class HostRoleAssignmentEditView(generic.ObjectEditView):
+    queryset = models.HostRoleAssignment.objects.all()
+    form = forms.HostRoleAssignmentForm
+
+
+class HostRoleAssignmentDeleteView(generic.ObjectDeleteView):
+    queryset = models.HostRoleAssignment.objects.all()
+
+
+class HostRoleAssignmentBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.HostRoleAssignment.objects.all()
+    table = tables.HostRoleAssignmentTable
+
+
+class HostRoleAssignmentVarView(generic.ObjectView):
+    queryset = models.HostRoleAssignmentVar.objects.all()
+
+
+class HostRoleAssignmentVarListView(generic.ObjectListView):
+    queryset = models.HostRoleAssignmentVar.objects.all()
+    table = tables.HostRoleAssignmentVarTable
+    filterset = filtersets.HostRoleAssignmentVarFilterSet
+    filterset_form = forms.HostRoleAssignmentVarFilterForm
+
+
+class HostRoleAssignmentVarEditView(generic.ObjectEditView):
+    queryset = models.HostRoleAssignmentVar.objects.all()
+    form = forms.HostRoleAssignmentVarForm
+
+
+class HostRoleAssignmentVarDeleteView(generic.ObjectDeleteView):
+    queryset = models.HostRoleAssignmentVar.objects.all()
+
+
+class HostRoleAssignmentVarBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.HostRoleAssignmentVar.objects.all()
+    table = tables.HostRoleAssignmentVarTable

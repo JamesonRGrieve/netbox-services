@@ -3,9 +3,10 @@ import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 from .models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
-    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue, ServiceInstanceExtension,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
+    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
+    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    ServiceInstanceExtension,
 )
 
 
@@ -222,3 +223,52 @@ class HAMirrorTable(NetBoxTable):
         model = HAMirror
         fields = ("pk", "id", "mirror", "primary", "tags", "created", "last_updated")
         default_columns = ("mirror", "primary")
+
+
+class HostRoleTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    idempotent = columns.BooleanColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:hostrole_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = HostRole
+        fields = ("pk", "id", "name", "display_name", "playbook", "idempotent", "tags", "created", "last_updated")
+        default_columns = ("name", "display_name", "playbook", "idempotent")
+
+
+class HostRoleParamTable(NetBoxTable):
+    role = tables.Column(linkify=True)
+    key = tables.Column(linkify=True)
+    value_type = columns.ChoiceFieldColumn()
+    required = columns.BooleanColumn()
+    secret = columns.BooleanColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:hostroleparam_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = HostRoleParam
+        fields = ("pk", "id", "role", "key", "value_type", "required", "default", "secret", "description",
+                  "tags", "created", "last_updated")
+        default_columns = ("role", "key", "value_type", "required", "secret")
+
+
+class HostRoleAssignmentTable(NetBoxTable):
+    role = tables.Column(linkify=True)
+    target = tables.Column(linkify=False, verbose_name="Target")
+    enabled = columns.BooleanColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:hostroleassignment_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = HostRoleAssignment
+        fields = ("pk", "id", "role", "target", "order", "enabled", "tags", "created", "last_updated")
+        default_columns = ("role", "target", "order", "enabled")
+
+
+class HostRoleAssignmentVarTable(NetBoxTable):
+    assignment = tables.Column(linkify=True)
+    param = tables.Column(linkify=True)
+    tags = columns.TagColumn(url_name="plugins:netbox_services:hostroleassignmentvar_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = HostRoleAssignmentVar
+        fields = ("pk", "id", "assignment", "param", "value", "tags", "created", "last_updated")
+        default_columns = ("assignment", "param", "value")

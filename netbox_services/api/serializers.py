@@ -13,9 +13,10 @@ from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
-    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue, ServiceInstanceExtension,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
+    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
+    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    ServiceInstanceExtension,
 )
 
 _META = ["tags", "custom_fields", "created", "last_updated"]
@@ -245,3 +246,66 @@ class HAMirrorSerializer(NetBoxModelSerializer):
         model = HAMirror
         fields = ["id", "url", "display", "mirror", "primary", *_META]
         brief_fields = ["id", "url", "display", "mirror", "primary"]
+
+
+class HostRoleSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:hostrole-detail")
+
+    class Meta:
+        model = HostRole
+        fields = [
+            "id", "url", "display", "name", "display_name", "description", "playbook",
+            "ansible_tags", "idempotent", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "name", "display_name"]
+
+
+class HostRoleParamSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:hostroleparam-detail")
+    role = HostRoleSerializer(nested=True)
+
+    class Meta:
+        model = HostRoleParam
+        fields = [
+            "id", "url", "display", "role", "key", "value_type", "required", "default", "secret",
+            "description", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "key", "value_type"]
+
+
+class HostRoleAssignmentSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:hostroleassignment-detail")
+    role = HostRoleSerializer(nested=True)
+    target_object_type = ContentTypeField(queryset=ContentType.objects.all())
+    target = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = HostRoleAssignment
+        fields = [
+            "id", "url", "display", "role", "target_object_type", "target_object_id", "target",
+            "order", "enabled", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "role", "order", "enabled"]
+
+    @extend_schema_field(serializers.JSONField(allow_null=True))
+    def get_target(self, obj):
+        if obj.target is None:
+            return None
+        request = self.context.get("request")
+        url = obj.target.get_absolute_url()
+        return {
+            "id": obj.target.pk,
+            "display": str(obj.target),
+            "url": request.build_absolute_uri(url) if request else url,
+        }
+
+
+class HostRoleAssignmentVarSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:hostroleassignmentvar-detail")
+    assignment = HostRoleAssignmentSerializer(nested=True)
+    param = HostRoleParamSerializer(nested=True)
+
+    class Meta:
+        model = HostRoleAssignmentVar
+        fields = ["id", "url", "display", "assignment", "param", "value", *_META]
+        brief_fields = ["id", "url", "display", "param", "value"]

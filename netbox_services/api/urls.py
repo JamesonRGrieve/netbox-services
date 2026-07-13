@@ -22,5 +22,9 @@ router.register("instance-extensions", views.ServiceInstanceExtensionViewSet)
 router.register("integrations", views.IntegrationViewSet)
 router.register("integration-params", views.IntegrationParamViewSet)
 router.register("ha-mirrors", views.HAMirrorViewSet)
+router.register("host-roles", views.HostRoleViewSet)
+router.register("host-role-params", views.HostRoleParamViewSet)
+router.register("host-role-assignments", views.HostRoleAssignmentViewSet)
+router.register("host-role-assignment-vars", views.HostRoleAssignmentVarViewSet)
 
 urlpatterns = router.urls

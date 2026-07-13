@@ -14,10 +14,11 @@ from ..choices import (
 )
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
-    CatalogToken, HAMirror, Integration, IntegrationCatalog, IntegrationCatalogParam, IntegrationParam,
-    ServiceInstanceConfigValue, ServiceInstanceExtension,
+    CatalogToken, HAMirror, HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration,
+    IntegrationCatalog, IntegrationCatalogParam, IntegrationParam, ServiceInstanceConfigValue,
+    ServiceInstanceExtension,
 )
-from .utils import make_catalog, make_instance, make_vm
+from .utils import make_assignment, make_catalog, make_instance, make_role, make_vm
 
 
 class ServiceCatalogModelTest(TestCase):
@@ -415,3 +416,96 @@ class HAMirrorModelTest(TestCase):
         db = make_catalog("mariadb")
         with self.assertRaises(ValidationError):
             HAMirror(mirror=make_instance(wp, hostname="wp"), primary=make_instance(db, hostname="db")).full_clean()
+
+
+class HostRoleModelTest(TestCase):
+    def test_create_str_url_defaults(self):
+        r = make_role("wire_fail2ban", display_name="Wire fail2ban")
+        self.assertEqual(str(r), "Wire fail2ban")
+        self.assertIn("/plugins/services/host-roles/", r.get_absolute_url())
+        self.assertTrue(r.idempotent)
+
+    def test_name_unique(self):
+        make_role("harden_php_ini")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            make_role("harden_php_ini")
+
+    def test_child_unique_and_cascade(self):
+        r = make_role("harden_apache_vhost")
+        HostRoleParam.objects.create(role=r, key="disable_xmlrpc", value_type=IntegrationParamValueTypeChoices.BOOL)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            HostRoleParam.objects.create(role=r, key="disable_xmlrpc", value_type=IntegrationParamValueTypeChoices.BOOL)
+        r.delete()
+        self.assertEqual(HostRoleParam.objects.count(), 0)
+
+
+class HostRoleAssignmentModelTest(TestCase):
+    def test_vm_target_str_url_order_default(self):
+        role = make_role("wire_aide")
+        vm = make_vm("ct-wp-1")
+        a = make_assignment(role, target=vm)
+        self.assertEqual(a.target, vm)
+        self.assertEqual(a.order, 0)
+        self.assertTrue(a.enabled)
+        self.assertIn("/plugins/services/host-role-assignments/", a.get_absolute_url())
+        self.assertIn(role.name, str(a))
+
+    def test_device_target(self):
+        role = make_role("wire_rkhunter")
+        dev = create_test_device("baremetal-hr-1")
+        a = make_assignment(role, target=dev)
+        self.assertEqual(a.target, dev)
+
+    def test_unique_target_role(self):
+        role = make_role("harden_php_fpm_pool")
+        vm = make_vm("ct-wp-2")
+        make_assignment(role, target=vm)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            HostRoleAssignment(role=role, target=vm).save()
+
+    def test_multiple_roles_same_target_distinct_order(self):
+        vm = make_vm("ct-wp-3")
+        r1, r2 = make_role("harden_php_ini"), make_role("wire_fail2ban")
+        a1 = make_assignment(r1, target=vm, order=1)
+        a2 = make_assignment(r2, target=vm, order=2)
+        ordered = list(HostRoleAssignment.objects.filter(target_object_id=vm.pk).order_by("order"))
+        self.assertEqual(ordered, [a1, a2])
+
+
+class HostRoleAssignmentVarModelTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.role = make_role("harden_php_ini")
+        cls.p_str = HostRoleParam.objects.create(
+            role=cls.role, key="disable_functions", value_type=IntegrationParamValueTypeChoices.STRING,
+            default="exec,system",
+        )
+        cls.p_secret = HostRoleParam.objects.create(
+            role=cls.role, key="db_tuning_ref", value_type=IntegrationParamValueTypeChoices.SECRET_REF, secret=True,
+        )
+        cls.assignment = make_assignment(cls.role)
+
+    def test_override_valid(self):
+        v = HostRoleAssignmentVar(assignment=self.assignment, param=self.p_str, value="exec,system,passthru")
+        v.full_clean()
+        v.save()
+        self.assertIn("disable_functions", str(v))
+        self.assertIn("/plugins/services/host-role-assignment-vars/", v.get_absolute_url())
+
+    def test_unique_assignment_param(self):
+        HostRoleAssignmentVar.objects.create(assignment=self.assignment, param=self.p_str, value="a")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            HostRoleAssignmentVar(assignment=self.assignment, param=self.p_str, value="b").save()
+
+    def test_reject_inline_secret(self):
+        with self.assertRaises(ValidationError):
+            HostRoleAssignmentVar(assignment=self.assignment, param=self.p_secret, value="literaltoken").full_clean()
+        HostRoleAssignmentVar(
+            assignment=self.assignment, param=self.p_secret, value="secret/data/wp/db_tuning"
+        ).full_clean()
+
+    def test_reject_cross_role_param(self):
+        other = make_role("wire_rkhunter")
+        foreign = HostRoleParam.objects.create(role=other, key="scan_hour", value_type=IntegrationParamValueTypeChoices.INT)
+        with self.assertRaises(ValidationError):
+            HostRoleAssignmentVar(assignment=self.assignment, param=foreign, value="3").full_clean()

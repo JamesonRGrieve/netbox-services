@@ -9,11 +9,12 @@ from utilities.testing import APIViewTestCases, create_test_device
 from ..choices import ExtensionKindChoices, IntegrationParamValueTypeChoices
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
-    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue, ServiceInstanceExtension,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
+    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
+    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    ServiceInstanceExtension,
 )
-from .utils import make_catalog, make_instance, make_vm
+from .utils import make_assignment, make_catalog, make_instance, make_role, make_vm
 
 
 class _CRUD(
@@ -392,4 +393,81 @@ class HAMirrorAPITest(_CRUD):
             {"mirror": mirrors[3].pk, "primary": primaries[3].pk},
             {"mirror": mirrors[4].pk, "primary": primaries[4].pk},
             {"mirror": mirrors[5].pk, "primary": primaries[5].pk},
+        ]
+
+
+class HostRoleAPITest(_CRUD):
+    model = HostRole
+    brief_fields = ["display", "display_name", "id", "name", "url"]
+    bulk_update_data = {"idempotent": False}
+
+    @classmethod
+    def setUpTestData(cls):
+        for n in ("wire_fail2ban", "wire_aide", "wire_rkhunter"):
+            make_role(n)
+        cls.create_data = [
+            {"name": "harden_php_ini", "display_name": "Harden PHP ini"},
+            {"name": "harden_apache_vhost", "display_name": "Harden Apache vhost"},
+            {"name": "wire_unattended_upgrades", "display_name": "Wire unattended-upgrades"},
+        ]
+
+
+class HostRoleParamAPITest(_CRUD):
+    model = HostRoleParam
+    brief_fields = ["display", "id", "key", "url", "value_type"]
+    bulk_update_data = {"required": True}
+
+    @classmethod
+    def setUpTestData(cls):
+        role = make_role("harden_php_ini")
+        HostRoleParam.objects.bulk_create([
+            HostRoleParam(role=role, key=f"k{i}", value_type=IntegrationParamValueTypeChoices.STRING)
+            for i in range(3)
+        ])
+        cls.create_data = [
+            {"role": role.pk, "key": "disable_functions", "value_type": "string", "default": "exec,system"},
+            {"role": role.pk, "key": "max_execution_time", "value_type": "int", "default": "60"},
+            {"role": role.pk, "key": "smtp_password", "value_type": "secret_ref", "secret": True},
+        ]
+
+
+class HostRoleAssignmentAPITest(_CRUD):
+    model = HostRoleAssignment
+    brief_fields = ["display", "enabled", "id", "order", "role", "url"]
+    bulk_update_data = {"enabled": False}
+
+    @classmethod
+    def setUpTestData(cls):
+        role = make_role("wire_fail2ban")
+        for i in range(3):
+            make_assignment(role, target=make_vm(f"vm-existing-hr-{i}"), order=i)
+        vms = [make_vm(f"vm-new-hr-{i}") for i in range(3)]
+        ct = "virtualization.virtualmachine"
+        cls.create_data = [
+            {"role": role.pk, "target_object_type": ct, "target_object_id": vms[0].pk, "order": 1},
+            {"role": role.pk, "target_object_type": ct, "target_object_id": vms[1].pk, "order": 2},
+            {"role": role.pk, "target_object_type": ct, "target_object_id": vms[2].pk, "order": 3},
+        ]
+
+
+class HostRoleAssignmentVarAPITest(_CRUD):
+    model = HostRoleAssignmentVar
+    brief_fields = ["display", "id", "param", "url", "value"]
+    bulk_update_data = {"value": "changed"}
+
+    @classmethod
+    def setUpTestData(cls):
+        role = make_role("harden_php_ini")
+        params = [
+            HostRoleParam.objects.create(role=role, key=f"k{i}", value_type=IntegrationParamValueTypeChoices.STRING)
+            for i in range(6)
+        ]
+        assignment = make_assignment(role)
+        HostRoleAssignmentVar.objects.bulk_create([
+            HostRoleAssignmentVar(assignment=assignment, param=params[i], value="v") for i in range(3)
+        ])
+        cls.create_data = [
+            {"assignment": assignment.pk, "param": params[3].pk, "value": "a"},
+            {"assignment": assignment.pk, "param": params[4].pk, "value": "b"},
+            {"assignment": assignment.pk, "param": params[5].pk, "value": "c"},
         ]

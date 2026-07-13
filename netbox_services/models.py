@@ -12,6 +12,14 @@ VM or raw-OS device; ports linked natively to ``ipam.Service``), :class:`Instanc
 (credential references), :class:`Integration` (the consumer→provider edge, with cardinality), and
 :class:`HAMirror` (a mirror→primary HA pairing).
 
+**Host-role layer** (the host-level analogue of the catalog/instance split above, scoped to
+cross-service ansible roles rather than a named application): :class:`HostRole` (a scoped ansible
+role/task-file catalog entry) plus :class:`HostRoleParam` (its typed var schema, mirroring
+:class:`CatalogConfigParam`), :class:`HostRoleAssignment` (which target — a guest VM or raw-OS
+device — runs the role and in what apply order), and :class:`HostRoleAssignmentVar` (per-assignment
+var overrides, mirroring :class:`ServiceInstanceConfigValue`). This is the SoT the ``tofu-ansible``
+provider's consuming module reads to emit ``ansible_role`` resources.
+
 Every attribute is a real typed column or a child row — **no config_context, no CustomField
 data-blob**. Secret *values* never live here; only OpenBao path references.
 """
@@ -775,3 +783,162 @@ class HAMirror(NetBoxModel):
                 raise ValidationError("A service instance cannot be its own HA mirror.")
             if self.mirror.catalog_id != self.primary.catalog_id:
                 raise ValidationError("HA mirror and primary must be the same service type.")
+
+
+# --------------------------------------------------------------------------- host-role layer
+
+
+class HostRole(NetBoxModel):
+    """A scoped ansible role/task-file catalog entry — the host-level analogue of
+    :class:`ServiceCatalog`, applied to a target regardless of which (if any) application also
+    runs there. ``name`` is the stable catalog key; ``playbook`` is the task-file/playbook path
+    relative to the ansible repo (e.g. ``common/baremetal/install_fail2ban.yml``); ``ansible_tags``
+    scopes which tagged block(s) of a shared playbook to run when the role is one of several tagged
+    sections rather than its own file. ``idempotent`` documents whether a re-apply is a safe no-op
+    (the consuming tofu module's contract with the operator; not enforced here)."""
+
+    name = models.SlugField(max_length=100, unique=True, help_text="Catalog key (ansible role/task-file identifier).")
+    display_name = models.CharField(max_length=200)
+    description = models.CharField(max_length=500, blank=True)
+    playbook = models.CharField(
+        max_length=255, blank=True, help_text="Task-file/playbook path relative to the ansible repo.",
+    )
+    ansible_tags = ArrayField(
+        models.CharField(max_length=100), default=list, blank=True,
+        help_text="ansible-playbook --tags scope, when the role is a tagged block of a shared playbook.",
+    )
+    idempotent = models.BooleanField(default=True, help_text="Safe to re-apply without side effects.")
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Host Role"
+
+    def __str__(self):
+        return self.display_name or self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:hostrole", args=[self.pk])
+
+
+class HostRoleParam(NetBoxModel):
+    """A typed var a host role accepts — the :class:`CatalogConfigParam` analogue for
+    :class:`HostRole`. ``default`` is the catalog default; a :class:`HostRoleAssignment` stores a
+    :class:`HostRoleAssignmentVar` row **only when it overrides** this (or for a required param with
+    no default). ``secret`` ⇒ the value is a ``secret_ref`` (OpenBao path), never inline."""
+
+    role = models.ForeignKey(HostRole, on_delete=models.CASCADE, related_name="params")
+    key = models.CharField(max_length=100, help_text="Var key (e.g. wordpress_php_disable_functions).")
+    value_type = models.CharField(max_length=16, choices=IntegrationParamValueTypeChoices)
+    required = models.BooleanField(default=False)
+    default = models.CharField(
+        max_length=255, blank=True,
+        help_text="Catalog default; an assignment stores a row only when it overrides this.",
+    )
+    secret = models.BooleanField(
+        default=False, help_text="When set, the value is a secret_ref (OpenBao path), never an inline value."
+    )
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["role", "key"]
+        verbose_name = "Host Role Param"
+        constraints = [
+            models.UniqueConstraint(fields=["role", "key"], name="netbox_services_hostroleparam_unique_role_key")
+        ]
+
+    def __str__(self):
+        return f"{self.role.name}: {self.key}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:hostroleparam", args=[self.pk])
+
+    def get_value_type_color(self):
+        return IntegrationParamValueTypeChoices.colors.get(self.value_type)
+
+
+class HostRoleAssignment(NetBoxModel):
+    """Which target — a guest VM or a raw-OS device — runs a :class:`HostRole`, and in what apply
+    order among the target's other assignments. ``target`` follows the same GFK pattern as
+    :attr:`ServiceInstance.parent` (limited to ``dcim.Device`` | ``virtualization.VirtualMachine`` via
+    the shared :data:`PARENT_CT_LIMIT`); a role is unrelated to any particular :class:`ServiceInstance`
+    on the same target — it applies at the host/OS level regardless of which app(s) run there."""
+
+    role = models.ForeignKey(HostRole, on_delete=models.PROTECT, related_name="assignments")
+    target_object_type = models.ForeignKey(
+        "contenttypes.ContentType", on_delete=models.PROTECT, related_name="+",
+        limit_choices_to=PARENT_CT_LIMIT,
+    )
+    target_object_id = models.PositiveBigIntegerField()
+    target = GenericForeignKey("target_object_type", "target_object_id")
+    order = models.PositiveSmallIntegerField(
+        default=0, help_text="Apply ordering among this target's assignments (ascending)."
+    )
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["target_object_type", "target_object_id", "order", "role"]
+        verbose_name = "Host Role Assignment"
+        indexes = [models.Index(fields=["target_object_type", "target_object_id"], name="netbox_serv_hr_target_idx")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["target_object_type", "target_object_id", "role"],
+                name="netbox_services_hostroleassignment_unique_target_role",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.target} → {self.role}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:hostroleassignment", args=[self.pk])
+
+
+def validate_host_role_assignment_var(assignment_var):
+    """Validate a :class:`HostRoleAssignmentVar`. The referenced :class:`HostRoleParam` must belong
+    to the assignment's **own role** (an assignment may only override params declared on its role),
+    and its ``value`` must satisfy the param's typed contract via
+    :func:`validate_integration_param_value` (the shared typed-value validator)."""
+    if not (assignment_var.assignment_id and assignment_var.param_id):
+        return
+    if assignment_var.param.role_id != assignment_var.assignment.role_id:
+        raise ValidationError(
+            f"Var param '{assignment_var.param.key}' belongs to role {assignment_var.param.role.name}, "
+            f"not the assignment's role {assignment_var.assignment.role.name}."
+        )
+    validate_integration_param_value(assignment_var.param, assignment_var.value)
+
+
+class HostRoleAssignmentVar(NetBoxModel):
+    """A per-assignment override of ONE of a role's typed vars — the instance-level SoT for the
+    parameters typed by :class:`HostRoleParam`. Stored **only on override** of the catalog default
+    (or for a required param with no default); the consuming tofu module merges catalog defaults with
+    these rows for the effective ``ansible_role`` vars. ``value`` is rendered per the linked
+    :class:`HostRoleParam`'s ``value_type`` (``list`` = newline-delimited, order preserved; a
+    ``secret`` param = OpenBao path reference, never the secret value). This is the host-role
+    analogue of :class:`ServiceInstanceConfigValue`."""
+
+    assignment = models.ForeignKey(HostRoleAssignment, on_delete=models.CASCADE, related_name="vars")
+    param = models.ForeignKey(HostRoleParam, on_delete=models.CASCADE, related_name="assignment_values")
+    value = models.CharField(
+        max_length=255, help_text="Rendered per value_type (list = newline-delimited; secret = OpenBao path)."
+    )
+
+    class Meta:
+        ordering = ["assignment", "param"]
+        verbose_name = "Host Role Assignment Var"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["assignment", "param"],
+                name="netbox_services_hostroleassignmentvar_unique_assignment_param",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.assignment}: {self.param.key}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:hostroleassignmentvar", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        validate_host_role_assignment_var(self)

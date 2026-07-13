@@ -6,15 +6,17 @@ from ..choices import (
     ServiceInstanceStatusChoices,
 )
 from ..filtersets import (
-    CatalogConfigParamFilterSet, CatalogExtensionFilterSet, IntegrationCatalogFilterSet,
+    CatalogConfigParamFilterSet, CatalogExtensionFilterSet, HostRoleAssignmentFilterSet,
+    HostRoleAssignmentVarFilterSet, HostRoleFilterSet, HostRoleParamFilterSet, IntegrationCatalogFilterSet,
     IntegrationCatalogParamFilterSet, IntegrationFilterSet, ServiceCatalogFilterSet,
     ServiceInstanceConfigValueFilterSet, ServiceInstanceExtensionFilterSet, ServiceInstanceFilterSet,
 )
 from ..models import (
-    CatalogConfigParam, CatalogExtension, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue, ServiceInstanceExtension,
+    CatalogConfigParam, CatalogExtension, HostRole, HostRoleAssignment, HostRoleAssignmentVar,
+    HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam, ServiceCatalog,
+    ServiceInstance, ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
-from .utils import make_catalog, make_instance
+from .utils import make_assignment, make_catalog, make_instance, make_role
 
 
 class ServiceCatalogFilterTest(TestCase):
@@ -274,3 +276,97 @@ class IntegrationFilterTest(TestCase):
 
     def test_type(self):
         self.assertEqual(self.filterset({"type": ["openbao"]}, self.queryset).qs.count(), 1)
+
+
+class HostRoleFilterTest(TestCase):
+    queryset = HostRole.objects.all()
+    filterset = HostRoleFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        make_role("wire_fail2ban", idempotent=True)
+        make_role("harden_php_ini", idempotent=False)
+
+    def test_name(self):
+        self.assertEqual(self.filterset({"name": ["wire_fail2ban"]}, self.queryset).qs.count(), 1)
+
+    def test_idempotent(self):
+        self.assertEqual(self.filterset({"idempotent": False}, self.queryset).qs.count(), 1)
+
+    def test_search(self):
+        self.assertEqual(self.filterset({"q": "fail2ban"}, self.queryset).qs.count(), 1)
+
+
+class HostRoleParamFilterTest(TestCase):
+    queryset = HostRoleParam.objects.all()
+    filterset = HostRoleParamFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.role = make_role("harden_php_ini")
+        HostRoleParam.objects.create(
+            role=cls.role, key="disable_functions", value_type=IntegrationParamValueTypeChoices.STRING
+        )
+        HostRoleParam.objects.create(
+            role=cls.role, key="max_execution_time", value_type=IntegrationParamValueTypeChoices.INT, required=True,
+        )
+        HostRoleParam.objects.create(
+            role=cls.role, key="db_password", value_type=IntegrationParamValueTypeChoices.SECRET_REF, secret=True,
+        )
+
+    def test_role_by_name(self):
+        self.assertEqual(self.filterset({"role": ["harden_php_ini"]}, self.queryset).qs.count(), 3)
+
+    def test_value_type(self):
+        self.assertEqual(
+            self.filterset({"value_type": [IntegrationParamValueTypeChoices.INT]}, self.queryset).qs.count(), 1
+        )
+
+    def test_required(self):
+        self.assertEqual(self.filterset({"required": True}, self.queryset).qs.count(), 1)
+
+    def test_secret(self):
+        self.assertEqual(self.filterset({"secret": True}, self.queryset).qs.count(), 1)
+
+    def test_search_key(self):
+        self.assertEqual(self.filterset({"q": "disable_functions"}, self.queryset).qs.count(), 1)
+
+
+class HostRoleAssignmentFilterTest(TestCase):
+    queryset = HostRoleAssignment.objects.all()
+    filterset = HostRoleAssignmentFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.role = make_role("wire_aide")
+        make_assignment(cls.role, enabled=True)
+        make_assignment(cls.role, enabled=False)
+
+    def test_role_id(self):
+        self.assertEqual(self.filterset({"role_id": [self.role.pk]}, self.queryset).qs.count(), 2)
+
+    def test_enabled(self):
+        self.assertEqual(self.filterset({"enabled": True}, self.queryset).qs.count(), 1)
+
+
+class HostRoleAssignmentVarFilterTest(TestCase):
+    queryset = HostRoleAssignmentVar.objects.all()
+    filterset = HostRoleAssignmentVarFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        role = make_role("harden_php_ini")
+        cls.param = HostRoleParam.objects.create(
+            role=role, key="max_execution_time", value_type=IntegrationParamValueTypeChoices.INT
+        )
+        cls.assignment = make_assignment(role)
+        HostRoleAssignmentVar.objects.create(assignment=cls.assignment, param=cls.param, value="90")
+
+    def test_assignment_id(self):
+        self.assertEqual(self.filterset({"assignment_id": [self.assignment.pk]}, self.queryset).qs.count(), 1)
+
+    def test_param_id(self):
+        self.assertEqual(self.filterset({"param_id": [self.param.pk]}, self.queryset).qs.count(), 1)
+
+    def test_search_param_key(self):
+        self.assertEqual(self.filterset({"q": "max_execution_time"}, self.queryset).qs.count(), 1)

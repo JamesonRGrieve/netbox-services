@@ -11,9 +11,10 @@ from .choices import (
 )
 from .models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
-    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue, ServiceInstanceExtension,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
+    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
+    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    ServiceInstanceExtension,
 )
 
 
@@ -33,6 +34,27 @@ class _CatalogChildFilterMixin(NetBoxModelFilterSet):
 class _InstanceChildFilterMixin(NetBoxModelFilterSet):
     instance_id = django_filters.ModelMultipleChoiceFilter(
         field_name="instance", queryset=ServiceInstance.objects.all(), label="Instance (ID)"
+    )
+
+    class Meta:
+        abstract = True
+
+
+class _RoleChildFilterMixin(NetBoxModelFilterSet):
+    role_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="role", queryset=HostRole.objects.all(), label="Host Role (ID)"
+    )
+    role = django_filters.ModelMultipleChoiceFilter(
+        field_name="role__name", to_field_name="name", queryset=HostRole.objects.all(), label="Host Role (name)",
+    )
+
+    class Meta:
+        abstract = True
+
+
+class _AssignmentChildFilterMixin(NetBoxModelFilterSet):
+    assignment_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="assignment", queryset=HostRoleAssignment.objects.all(), label="Assignment (ID)"
     )
 
     class Meta:
@@ -248,3 +270,47 @@ class HAMirrorFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(mirror__hostname__icontains=value) | Q(primary__hostname__icontains=value))
+
+
+class HostRoleFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = HostRole
+        fields = ["id", "name", "display_name", "idempotent"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(
+            Q(name__icontains=value) | Q(display_name__icontains=value) | Q(description__icontains=value)
+        )
+
+
+class HostRoleParamFilterSet(_RoleChildFilterMixin):
+    value_type = django_filters.MultipleChoiceFilter(choices=IntegrationParamValueTypeChoices)
+
+    class Meta:
+        model = HostRoleParam
+        fields = ["id", "key", "value_type", "required", "secret"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(key__icontains=value) | Q(description__icontains=value))
+
+
+class HostRoleAssignmentFilterSet(_RoleChildFilterMixin):
+    class Meta:
+        model = HostRoleAssignment
+        fields = ["id", "target_object_id", "order", "enabled"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(role__name__icontains=value))
+
+
+class HostRoleAssignmentVarFilterSet(_AssignmentChildFilterMixin):
+    param_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="param", queryset=HostRoleParam.objects.all(), label="Param (ID)"
+    )
+
+    class Meta:
+        model = HostRoleAssignmentVar
+        fields = ["id", "value"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(value__icontains=value) | Q(param__key__icontains=value))

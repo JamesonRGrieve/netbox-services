@@ -3,17 +3,19 @@ from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
-    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue, ServiceInstanceExtension,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
+    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
+    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    ServiceInstanceExtension,
 )
 from .serializers import (
     CatalogConfigParamSerializer, CatalogCredentialSerializer, CatalogExtensionSerializer,
     CatalogSecondaryPortSerializer, CatalogTestIntegrationSerializer, CatalogTestStateSerializer,
-    CatalogTokenSerializer, HAMirrorSerializer, IntegrationCatalogParamSerializer,
-    IntegrationCatalogSerializer, IntegrationParamSerializer, IntegrationSerializer,
-    InstanceOpenBaoPathSerializer, ServiceCatalogSerializer, ServiceInstanceConfigValueSerializer,
-    ServiceInstanceExtensionSerializer, ServiceInstanceSerializer,
+    CatalogTokenSerializer, HAMirrorSerializer, HostRoleAssignmentSerializer,
+    HostRoleAssignmentVarSerializer, HostRoleParamSerializer, HostRoleSerializer,
+    IntegrationCatalogParamSerializer, IntegrationCatalogSerializer, IntegrationParamSerializer,
+    IntegrationSerializer, InstanceOpenBaoPathSerializer, ServiceCatalogSerializer,
+    ServiceInstanceConfigValueSerializer, ServiceInstanceExtensionSerializer, ServiceInstanceSerializer,
 )
 
 
@@ -117,3 +119,27 @@ class HAMirrorViewSet(NetBoxModelViewSet):
     queryset = HAMirror.objects.prefetch_related("mirror", "primary", "tags")
     serializer_class = HAMirrorSerializer
     filterset_class = filtersets.HAMirrorFilterSet
+
+
+class HostRoleViewSet(NetBoxModelViewSet):
+    queryset = HostRole.objects.prefetch_related("tags")
+    serializer_class = HostRoleSerializer
+    filterset_class = filtersets.HostRoleFilterSet
+
+
+class HostRoleParamViewSet(NetBoxModelViewSet):
+    queryset = HostRoleParam.objects.prefetch_related("role", "tags")
+    serializer_class = HostRoleParamSerializer
+    filterset_class = filtersets.HostRoleParamFilterSet
+
+
+class HostRoleAssignmentViewSet(NetBoxModelViewSet):
+    queryset = HostRoleAssignment.objects.prefetch_related("role", "target_object_type", "tags")
+    serializer_class = HostRoleAssignmentSerializer
+    filterset_class = filtersets.HostRoleAssignmentFilterSet
+
+
+class HostRoleAssignmentVarViewSet(NetBoxModelViewSet):
+    queryset = HostRoleAssignmentVar.objects.prefetch_related("assignment", "param", "tags")
+    serializer_class = HostRoleAssignmentVarSerializer
+    filterset_class = filtersets.HostRoleAssignmentVarFilterSet

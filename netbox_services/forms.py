@@ -16,9 +16,10 @@ from .choices import (
 )
 from .models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, Integration, IntegrationCatalog,
-    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance,
-    ServiceInstanceConfigValue, ServiceInstanceExtension,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
+    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
+    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    ServiceInstanceExtension,
 )
 
 
@@ -238,6 +239,70 @@ class HAMirrorForm(NetBoxModelForm):
         fields = ["mirror", "primary", "tags"]
 
 
+class HostRoleForm(NetBoxModelForm):
+    fieldsets = (
+        FieldSet("name", "display_name", "description", name="Identity"),
+        FieldSet("playbook", "ansible_tags", "idempotent", name="Ansible"),
+    )
+
+    class Meta:
+        model = HostRole
+        fields = ["name", "display_name", "description", "playbook", "ansible_tags", "idempotent", "tags"]
+
+
+class HostRoleParamForm(NetBoxModelForm):
+    role = DynamicModelChoiceField(queryset=HostRole.objects.all())
+    fieldsets = (
+        FieldSet("role", "key", "value_type", "required", "default", "secret", "description", name="Role param"),
+    )
+
+    class Meta:
+        model = HostRoleParam
+        fields = ["role", "key", "value_type", "required", "default", "secret", "description", "tags"]
+
+
+class HostRoleAssignmentForm(NetBoxModelForm):
+    role = DynamicModelChoiceField(queryset=HostRole.objects.all())
+    device = DynamicModelChoiceField(queryset=Device.objects.all(), required=False, label="Device")
+    virtual_machine = DynamicModelChoiceField(queryset=VirtualMachine.objects.all(), required=False, label="Virtual machine")
+
+    fieldsets = (
+        FieldSet("role", "order", "enabled", name="Assignment"),
+        FieldSet("device", "virtual_machine", name="Target (set exactly one)"),
+    )
+
+    class Meta:
+        model = HostRoleAssignment
+        fields = ["role", "order", "enabled", "tags"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        target = getattr(self.instance, "target", None)
+        if isinstance(target, Device):
+            self.fields["device"].initial = target.pk
+        elif isinstance(target, VirtualMachine):
+            self.fields["virtual_machine"].initial = target.pk
+
+    def clean(self):
+        super().clean()
+        device = self.cleaned_data.get("device")
+        vm = self.cleaned_data.get("virtual_machine")
+        if bool(device) == bool(vm):
+            raise forms.ValidationError("Set exactly one target: a device or a virtual machine.")
+        self.instance.target = device or vm
+        return self.cleaned_data
+
+
+class HostRoleAssignmentVarForm(NetBoxModelForm):
+    assignment = DynamicModelChoiceField(queryset=HostRoleAssignment.objects.all())
+    param = DynamicModelChoiceField(queryset=HostRoleParam.objects.all())
+    fieldsets = (FieldSet("assignment", "param", "value", name="Override value"),)
+
+    class Meta:
+        model = HostRoleAssignmentVar
+        fields = ["assignment", "param", "value", "tags"]
+
+
 # --------------------------------------------------------------------------- filter forms
 
 
@@ -365,3 +430,32 @@ class HAMirrorFilterForm(NetBoxModelFilterSetForm):
     mirror_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Mirror")
     primary_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Primary")
     tag = TagFilterField(HAMirror)
+
+
+class HostRoleFilterForm(NetBoxModelFilterSetForm):
+    model = HostRole
+    idempotent = forms.NullBooleanField(required=False)
+    tag = TagFilterField(HostRole)
+
+
+class HostRoleParamFilterForm(NetBoxModelFilterSetForm):
+    model = HostRoleParam
+    role_id = DynamicModelMultipleChoiceField(queryset=HostRole.objects.all(), required=False, label="Host Role")
+    value_type = forms.MultipleChoiceField(choices=IntegrationParamValueTypeChoices, required=False)
+    required = forms.NullBooleanField(required=False)
+    secret = forms.NullBooleanField(required=False)
+    tag = TagFilterField(HostRoleParam)
+
+
+class HostRoleAssignmentFilterForm(NetBoxModelFilterSetForm):
+    model = HostRoleAssignment
+    role_id = DynamicModelMultipleChoiceField(queryset=HostRole.objects.all(), required=False, label="Host Role")
+    enabled = forms.NullBooleanField(required=False)
+    tag = TagFilterField(HostRoleAssignment)
+
+
+class HostRoleAssignmentVarFilterForm(NetBoxModelFilterSetForm):
+    model = HostRoleAssignmentVar
+    assignment_id = DynamicModelMultipleChoiceField(queryset=HostRoleAssignment.objects.all(), required=False, label="Assignment")
+    param_id = DynamicModelMultipleChoiceField(queryset=HostRoleParam.objects.all(), required=False, label="Param")
+    tag = TagFilterField(HostRoleAssignmentVar)
