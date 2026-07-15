@@ -453,6 +453,31 @@ class HostRoleBulkDeleteView(generic.BulkDeleteView):
     table = tables.HostRoleTable
 
 
+class RotationPolicyView(generic.ObjectView):
+    queryset = models.RotationPolicy.objects.all()
+
+
+class RotationPolicyListView(generic.ObjectListView):
+    queryset = models.RotationPolicy.objects.all()
+    table = tables.RotationPolicyTable
+    filterset = filtersets.RotationPolicyFilterSet
+    filterset_form = forms.RotationPolicyFilterForm
+
+
+class RotationPolicyEditView(generic.ObjectEditView):
+    queryset = models.RotationPolicy.objects.all()
+    form = forms.RotationPolicyForm
+
+
+class RotationPolicyDeleteView(generic.ObjectDeleteView):
+    queryset = models.RotationPolicy.objects.all()
+
+
+class RotationPolicyBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.RotationPolicy.objects.all()
+    table = tables.RotationPolicyTable
+
+
 class HostRoleParamView(generic.ObjectView):
     queryset = models.HostRoleParam.objects.all()
 

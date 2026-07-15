@@ -4,7 +4,8 @@ integrations**. The catalog layer (``ServiceCatalog`` + children) is the upstrea
 ``about.json`` is generated *from*; the instance layer (``ServiceInstance`` + ``Integration``
 + ``HAMirror``) models deployed apps, their instance-to-instance integration edges with
 cardinality, and HA mirror pairings — the data the ``tofu-services`` provider reads and the
-Semaphore reconciler acts on.
+Semaphore reconciler acts on. ``RotationPolicy`` records secret-rotation intent, OpenBao
+references, atomic host roles, and consumer fan-out without ever storing secret values.
 
 **Secret policy:** credential and provides-token *references* only (``InstanceOpenBaoPath`` keys
 an OpenBao path); secret values never live here. **No config_context, no CustomField data-blob** —

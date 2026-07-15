@@ -55,7 +55,7 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
 |------|----------------|
 | `__init__.py` | `PluginConfig` — name `netbox_services`, `base_url='services'`, min/max 4.6; `ready()` wires `signals` |
 | `choices.py` | `ChoiceSet`s: instance status, provider scope, HA strategy, distro, database type (port protocol reuses core `ipam.choices`) |
-| `models.py` | the 13 models (see below) + `validate_integration_cardinality` / `validate_integration_param(s)` |
+| `models.py` | typed catalog/instance/rotation models + validation helpers |
 | `signals.py` | `pre_save` backstop calling `validate_integration_cardinality` (catches ORM/seeder writes that bypass `clean()`) |
 | `migrations/0001_initial.py` | hand-authored (NetBox disables makemigrations in prod); verify with `makemigrations --check --dry-run` |
 | `api/serializers.py`, `api/views.py`, `api/urls.py` | REST (`NetBoxModelViewSet`) — the contract the provider + seeder read |
@@ -74,7 +74,7 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
 - **IntegrationCatalog** (FK): `type`, `requires_service`, `requires_tokens[]`, `playbook`,
   `description`, `provider_scope` (shared|dedicated), `consumer_max` (cardinality source).
 - **IntegrationCatalogParam** (FK IntegrationCatalog): `key`, `value_type`
-  (string|int|bool|url|list|secret_ref), `required`, `default`, `secret`, `description` — the typed
+  (string|int|bool|url|list|map|float|secret; legacy secret_ref accepted), `required`, `default`, `secret`, `description` — the typed
   schema for the per-edge integration config params (SSO redirect URIs/scopes, cache db-index, S3
   bucket/prefix, SMTP from-address, …) that today live inline in each `integrate_*.yml`. Catalog
   side of the catalog-declares / instance-values split (sibling of `CatalogToken`).
@@ -96,11 +96,14 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
   value differing from the `IntegrationCatalogParam.default` (or a required param with no default);
   effective config = catalog defaults overlaid with these rows. `unique(integration, key)`;
   `value` rendered per the matched catalog param's `value_type` (`list` = newline-delimited, order
-  preserved; `secret_ref` = OpenBao path). `clean()` rejects an undeclared key, a value that fails
+  preserved; `map` = newline-delimited `key=value`; `secret` = OpenBao path). `clean()` rejects an undeclared key, a value that fails
   its `value_type` parse, and an **inline value on a secret param** (must be an OpenBao path — secret
   values never live here); the edge's `clean()` rejects a missing required param without a default.
 - **HAMirror** (edge): `mirror`/`primary` FK → ServiceInstance; `unique(mirror, primary)`; both
   must be the same catalog type; the reconciler reads `mirror.catalog.ha_strategy`.
+- **RotationPolicy**: service instance + secret kind + OpenBao path reference + cadence/on-demand
+  trigger metadata + atomic HostRole + consumer M2M fan-out + optional Semaphore schedule ref.
+  Secret values never enter NetBox.
 
 ---
 

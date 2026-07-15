@@ -15,7 +15,7 @@ from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
     CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
     HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 
@@ -258,6 +258,25 @@ class HostRoleSerializer(NetBoxModelSerializer):
             "ansible_tags", "idempotent", *_META,
         ]
         brief_fields = ["id", "url", "display", "name", "display_name"]
+
+
+class RotationPolicySerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:rotationpolicy-detail")
+    instance = ServiceInstanceSerializer(nested=True)
+    host_role = HostRoleSerializer(nested=True)
+    consumers = SerializedPKRelatedField(
+        queryset=ServiceInstance.objects.all(), serializer=ServiceInstanceSerializer,
+        nested=True, required=False, many=True,
+    )
+
+    class Meta:
+        model = RotationPolicy
+        fields = [
+            "id", "url", "display", "instance", "name", "secret_kind", "openbao_path",
+            "cadence_days", "last_rotated_at", "next_due_at", "trigger_version", "host_role",
+            "consumers", "semaphore_schedule_ref", "enabled", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "instance", "name", "secret_kind", "enabled"]
 
 
 class HostRoleParamSerializer(NetBoxModelSerializer):

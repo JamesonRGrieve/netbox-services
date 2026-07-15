@@ -14,8 +14,8 @@ See **[DESIGN.md](DESIGN.md)** (decisions of record, data model, critical path, 
 ```
 netbox_services/
   __init__.py        PluginConfig (base_url 'services'); ready() wires signals
-  choices.py         instance status, provider scope, HA strategy, distro, database type
-  models.py          11 models + validate_integration_cardinality
+  choices.py         instance status, provider scope, HA strategy, typed config values
+  models.py          typed catalog, instance, integration, host-role, and rotation models
   signals.py         pre_save cardinality backstop (catches ORM/seeder writes)
   migrations/0001    hand-authored CreateModel for all models
   api/               REST (NetBoxModelViewSet) — /api/plugins/services/
@@ -28,8 +28,10 @@ netbox_services/
 (`CatalogCredential`, `CatalogToken`, `CatalogSecondaryPort`, `IntegrationCatalog`,
 `CatalogTestState`/`CatalogTestIntegration`). **Instance layer** (what the provider reads):
 `ServiceInstance` (parent GFK → VM | Device; ports via M2M → `ipam.Service`), `InstanceOpenBaoPath`,
-the `Integration` edge (with cardinality), and `HAMirror`. No `config_context`, no JSON blobs;
-secret *values* never stored — only OpenBao path references.
+the `Integration` edge (with cardinality), `HAMirror`, and `RotationPolicy` (cadence/on-demand
+trigger, atomic host role, and consumer fan-out). Config values support typed string/int/bool/url,
+newline lists/maps, finite floats, and OpenBao secret references. No `config_context`, no JSON
+blobs; secret *values* are never stored.
 
 ## Develop / test
 

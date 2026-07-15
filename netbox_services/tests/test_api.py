@@ -11,7 +11,7 @@ from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
     CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
     HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 from .utils import make_assignment, make_catalog, make_instance, make_role, make_vm
@@ -409,6 +409,33 @@ class HostRoleAPITest(_CRUD):
             {"name": "harden_php_ini", "display_name": "Harden PHP ini"},
             {"name": "harden_apache_vhost", "display_name": "Harden Apache vhost"},
             {"name": "wire_unattended_upgrades", "display_name": "Wire unattended-upgrades"},
+        ]
+
+
+class RotationPolicyAPITest(_CRUD):
+    model = RotationPolicy
+    brief_fields = ["display", "enabled", "id", "instance", "name", "secret_kind", "url"]
+    bulk_update_data = {"enabled": False}
+
+    @classmethod
+    def setUpTestData(cls):
+        catalog = make_catalog("postgres")
+        role = make_role("rotate-postgres-role")
+        instances = [make_instance(catalog, hostname=f"postgres-{i}") for i in range(6)]
+        consumer = make_instance(make_catalog("forgejo"), hostname="forgejo")
+        for i in range(3):
+            policy = RotationPolicy.objects.create(
+                instance=instances[i], name=f"existing-{i}", secret_kind="database-password",
+                openbao_path=f"secret/data/postgres/existing-{i}", host_role=role,
+            )
+            policy.consumers.add(consumer)
+        cls.create_data = [
+            {
+                "instance": instances[i].pk, "name": f"new-{i}", "secret_kind": "database-password",
+                "openbao_path": f"secret/data/postgres/new-{i}", "host_role": role.pk,
+                "consumers": [consumer.pk], "cadence_days": 90,
+            }
+            for i in range(3, 6)
         ]
 
 

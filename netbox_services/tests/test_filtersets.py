@@ -9,11 +9,12 @@ from ..filtersets import (
     CatalogConfigParamFilterSet, CatalogExtensionFilterSet, HostRoleAssignmentFilterSet,
     HostRoleAssignmentVarFilterSet, HostRoleFilterSet, HostRoleParamFilterSet, IntegrationCatalogFilterSet,
     IntegrationCatalogParamFilterSet, IntegrationFilterSet, ServiceCatalogFilterSet,
-    ServiceInstanceConfigValueFilterSet, ServiceInstanceExtensionFilterSet, ServiceInstanceFilterSet,
+    RotationPolicyFilterSet, ServiceInstanceConfigValueFilterSet, ServiceInstanceExtensionFilterSet,
+    ServiceInstanceFilterSet,
 )
 from ..models import (
     CatalogConfigParam, CatalogExtension, HostRole, HostRoleAssignment, HostRoleAssignmentVar,
-    HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam, ServiceCatalog,
+    HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam, RotationPolicy, ServiceCatalog,
     ServiceInstance, ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 from .utils import make_assignment, make_catalog, make_instance, make_role
@@ -295,6 +296,31 @@ class HostRoleFilterTest(TestCase):
 
     def test_search(self):
         self.assertEqual(self.filterset({"q": "fail2ban"}, self.queryset).qs.count(), 1)
+
+
+class RotationPolicyFilterTest(TestCase):
+    queryset = RotationPolicy.objects.all()
+    filterset = RotationPolicyFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        catalog = make_catalog("postgres")
+        cls.role = make_role("rotate-postgres-role")
+        cls.consumer = make_instance(make_catalog("forgejo"), hostname="forgejo")
+        for i, enabled in enumerate((True, False)):
+            policy = RotationPolicy.objects.create(
+                instance=make_instance(catalog, hostname=f"postgres-{i}"), name=f"role-{i}",
+                secret_kind="database-password", openbao_path=f"secret/data/postgres/role-{i}",
+                host_role=cls.role, enabled=enabled,
+            )
+            if i == 0:
+                policy.consumers.add(cls.consumer)
+
+    def test_role_consumer_enabled_and_search(self):
+        self.assertEqual(self.filterset({"host_role_id": [self.role.pk]}, self.queryset).qs.count(), 2)
+        self.assertEqual(self.filterset({"consumer_id": [self.consumer.pk]}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({"enabled": True}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({"q": "role-1"}, self.queryset).qs.count(), 1)
 
 
 class HostRoleParamFilterTest(TestCase):

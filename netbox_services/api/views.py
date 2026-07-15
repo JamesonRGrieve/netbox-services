@@ -5,7 +5,7 @@ from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
     CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
     HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 from .serializers import (
@@ -14,7 +14,7 @@ from .serializers import (
     CatalogTokenSerializer, HAMirrorSerializer, HostRoleAssignmentSerializer,
     HostRoleAssignmentVarSerializer, HostRoleParamSerializer, HostRoleSerializer,
     IntegrationCatalogParamSerializer, IntegrationCatalogSerializer, IntegrationParamSerializer,
-    IntegrationSerializer, InstanceOpenBaoPathSerializer, ServiceCatalogSerializer,
+    IntegrationSerializer, InstanceOpenBaoPathSerializer, RotationPolicySerializer, ServiceCatalogSerializer,
     ServiceInstanceConfigValueSerializer, ServiceInstanceExtensionSerializer, ServiceInstanceSerializer,
 )
 
@@ -125,6 +125,12 @@ class HostRoleViewSet(NetBoxModelViewSet):
     queryset = HostRole.objects.prefetch_related("tags")
     serializer_class = HostRoleSerializer
     filterset_class = filtersets.HostRoleFilterSet
+
+
+class RotationPolicyViewSet(NetBoxModelViewSet):
+    queryset = RotationPolicy.objects.prefetch_related("instance", "host_role", "consumers", "tags")
+    serializer_class = RotationPolicySerializer
+    filterset_class = filtersets.RotationPolicyFilterSet
 
 
 class HostRoleParamViewSet(NetBoxModelViewSet):

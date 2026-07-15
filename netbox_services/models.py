@@ -23,6 +23,7 @@ provider's consuming module reads to emit ``ansible_role`` resources.
 Every attribute is a real typed column or a child row — **no config_context, no CustomField
 data-blob**. Secret *values* never live here; only OpenBao path references.
 """
+from math import isfinite
 from urllib.parse import urlparse
 
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -226,7 +227,7 @@ class IntegrationCatalogParam(NetBoxModel):
     today live inline in each ``integrate_*.yml``: SSO redirect URIs/scopes/claims, cache db-index,
     S3 bucket/prefix, SMTP from-address, …). ``default`` is the catalog default; an edge stores an
     :class:`IntegrationParam` row **only when it overrides** this (or for a required param with no
-    default). ``secret`` ⇒ the value is a ``secret_ref`` (OpenBao path), never an inline value."""
+    default). ``secret`` ⇒ the value is an OpenBao path, never an inline value."""
 
     integration_catalog = models.ForeignKey(
         IntegrationCatalog, on_delete=models.CASCADE, related_name="params"
@@ -238,7 +239,7 @@ class IntegrationCatalogParam(NetBoxModel):
         max_length=255, blank=True, help_text="Catalog default; an edge stores a row only when it overrides this."
     )
     secret = models.BooleanField(
-        default=False, help_text="When set, the value is a secret_ref (OpenBao path), never an inline value."
+        default=False, help_text="When set, the value is an OpenBao path, never an inline value."
     )
     description = models.CharField(max_length=255, blank=True)
 
@@ -265,14 +266,14 @@ class IntegrationCatalogParam(NetBoxModel):
 class CatalogConfigParam(NetBoxModel):
     """A declarative config attribute a service *type* accepts (the typed schema for the service's
     OWN source-of-truthable config — listen address, worker count, feature flags, an admin email,
-    a secret_ref for an API key, …). This is the service-config analogue of
+    an OpenBao path for an API key, …). This is the service-config analogue of
     :class:`IntegrationCatalogParam` (which types the per-*edge* integration params); it types the
     per-*instance* values stored in :class:`ServiceInstanceConfigValue`. ``default`` is the catalog
     default — an instance stores a row **only when it overrides** this (or for a required param with
-    no default). ``secret`` ⇒ the value is a ``secret_ref`` (OpenBao path), never an inline value.
+    no default). ``secret`` ⇒ the value is an OpenBao path, never an inline value.
     ``provider_attr`` is the ``resource.attribute`` the in-house ``tofu-services`` provider maps this
     param onto. ``value_type`` reuses :class:`IntegrationParamValueTypeChoices` — the same
-    typed-value domain (string / int / bool / url / list / secret_ref)."""
+    typed-value domain (string / int / bool / url / list / map / float / secret)."""
 
     catalog = models.ForeignKey(ServiceCatalog, on_delete=models.CASCADE, related_name="config_params")
     key = models.CharField(max_length=100, help_text="Config attribute key (e.g. listen_addr, workers, admin_email).")
@@ -283,7 +284,7 @@ class CatalogConfigParam(NetBoxModel):
         help_text="Catalog default; an instance stores a row only when it overrides this.",
     )
     secret = models.BooleanField(
-        default=False, help_text="When set, the value is a secret_ref (OpenBao path), never an inline value."
+        default=False, help_text="When set, the value is an OpenBao path, never an inline value."
     )
     provider_attr = models.CharField(
         max_length=200, blank=True,
@@ -581,13 +582,16 @@ class Integration(NetBoxModel):
 
 def validate_integration_param_value(catalog_param, value):
     """Parse-check an :class:`IntegrationParam.value` against its :class:`IntegrationCatalogParam`.
-    A ``secret`` param (or ``secret_ref`` type) must be an OpenBao **path reference** — it must
+    A ``secret`` param (or legacy ``secret_ref`` type) must be an OpenBao **path reference** — it must
     contain ``/`` and must not look like an inline literal (a URL ``://`` or an email ``@``); an
     inline value there is rejected (secret *values* never live in NetBox). Otherwise the value must
-    parse for its ``value_type`` (``int`` → ``int()``, ``bool`` → true/false, ``url`` → scheme +
-    host). ``string`` / ``list`` carry no structural constraint (``list`` order is preserved by its
+    parse for its ``value_type`` (``int`` → ``int()``, finite ``float``, ``bool`` → true/false,
+    ``url`` → scheme + host, ``map`` → newline-delimited unique ``key=value`` entries).
+    ``string`` / ``list`` carry no structural constraint (``list`` order is preserved by its
     newline-delimited storage)."""
-    is_secret = catalog_param.secret or catalog_param.value_type == IntegrationParamValueTypeChoices.SECRET_REF
+    is_secret = catalog_param.secret or catalog_param.value_type in {
+        IntegrationParamValueTypeChoices.SECRET, IntegrationParamValueTypeChoices.SECRET_REF,
+    }
     if is_secret:
         if "://" in value or "@" in value or "/" not in value:
             raise ValidationError(
@@ -608,6 +612,22 @@ def validate_integration_param_value(catalog_param, value):
         parsed = urlparse(value)
         if not (parsed.scheme and parsed.netloc):
             raise ValidationError(f"Param '{catalog_param.key}' must be a URL with a scheme, got '{value}'.")
+    elif value_type == IntegrationParamValueTypeChoices.FLOAT:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            raise ValidationError(f"Param '{catalog_param.key}' must be a float, got '{value}'.")
+        if not isfinite(parsed):
+            raise ValidationError(f"Param '{catalog_param.key}' must be a finite float, got '{value}'.")
+    elif value_type == IntegrationParamValueTypeChoices.MAP:
+        entries = value.splitlines()
+        if any("=" not in entry or not entry.split("=", 1)[0].strip() for entry in entries):
+            raise ValidationError(
+                f"Param '{catalog_param.key}' must be a newline-delimited key=value map, got '{value}'."
+            )
+        keys = [entry.split("=", 1)[0].strip() for entry in entries]
+        if len(keys) != len(set(keys)):
+            raise ValidationError(f"Param '{catalog_param.key}' map keys must be unique, got '{value}'.")
 
 
 def validate_integration_param(param):
@@ -635,12 +655,14 @@ class IntegrationParam(NetBoxModel):
     the catalog default (or for a required param with no default); the consumer merges catalog
     defaults with these rows for the effective config. ``value`` is rendered per the matched
     :class:`IntegrationCatalogParam`'s ``value_type`` (``list`` = newline-delimited, order
-    preserved; ``secret_ref`` = OpenBao path reference, never the secret value)."""
+    preserved; ``map`` = newline-delimited ``key=value``; ``secret`` = OpenBao path reference,
+    never the secret value)."""
 
     integration = models.ForeignKey(Integration, on_delete=models.CASCADE, related_name="params")
     key = models.CharField(max_length=100, help_text="Matches an IntegrationCatalogParam.key for the edge's type.")
     value = models.CharField(
-        max_length=255, help_text="Rendered per value_type (list = newline-delimited; secret_ref = OpenBao path)."
+        max_length=255,
+        help_text="Rendered per value_type (list/map = newline-delimited; secret = OpenBao path).",
     )
 
     class Meta:
@@ -667,9 +689,10 @@ def validate_service_instance_config_value(config_value):
     """Validate a :class:`ServiceInstanceConfigValue`. The referenced :class:`CatalogConfigParam`
     must belong to the **instance's own service type** (an instance may only override config params
     declared on its catalog), and its ``value`` must satisfy the param's typed contract via
-    :func:`validate_integration_param_value` (the shared typed-value validator: ``int`` parses,
-    ``bool`` is true/false, ``url`` has a scheme + host, a ``secret`` param must be an OpenBao path
-    reference — never an inline value)."""
+    :func:`validate_integration_param_value` (the shared typed-value validator: ``int`` and finite
+    ``float`` parse, ``bool`` is true/false, ``url`` has a scheme + host, ``map`` is flat
+    newline-delimited key/value data, and a ``secret`` param must be an OpenBao path reference —
+    never an inline value)."""
     if not (config_value.instance_id and config_value.param_id):
         return
     if config_value.param.catalog_id != config_value.instance.catalog_id:
@@ -818,6 +841,49 @@ class HostRole(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_services:hostrole", args=[self.pk])
+
+
+class RotationPolicy(NetBoxModel):
+    """Run intent for one service-owned secret rotation. NetBox stores only the OpenBao path and
+    orchestration metadata; the referenced atomic host role performs the operation and updates all
+    declared consumer instances before recording completion."""
+
+    instance = models.ForeignKey(ServiceInstance, on_delete=models.CASCADE, related_name="rotation_policies")
+    name = models.SlugField(max_length=100)
+    secret_kind = models.CharField(max_length=100)
+    openbao_path = models.CharField(max_length=255)
+    cadence_days = models.PositiveIntegerField(null=True, blank=True)
+    last_rotated_at = models.DateTimeField(null=True, blank=True)
+    next_due_at = models.DateTimeField(null=True, blank=True)
+    trigger_version = models.PositiveBigIntegerField(default=0)
+    host_role = models.ForeignKey(HostRole, on_delete=models.PROTECT, related_name="rotation_policies")
+    consumers = models.ManyToManyField(ServiceInstance, related_name="consumed_rotation_policies", blank=True)
+    semaphore_schedule_ref = models.CharField(max_length=255, blank=True)
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["instance", "name"]
+        verbose_name = "Rotation Policy"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["instance", "name"], name="netbox_services_rotationpolicy_unique_instance_name"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.instance}: {self.name}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:rotationpolicy", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        if "://" in self.openbao_path or "@" in self.openbao_path or "/" not in self.openbao_path:
+            raise ValidationError("openbao_path must be an OpenBao path reference, never an inline secret or URL.")
+        if self.next_due_at and not self.cadence_days:
+            raise ValidationError("next_due_at requires cadence_days; leave both blank for on-demand rotation.")
+        if self.last_rotated_at and self.next_due_at and self.next_due_at <= self.last_rotated_at:
+            raise ValidationError("next_due_at must be later than last_rotated_at.")
 
 
 class HostRoleParam(NetBoxModel):

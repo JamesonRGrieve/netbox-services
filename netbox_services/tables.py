@@ -5,7 +5,7 @@ from .models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
     CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
     HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 
@@ -234,6 +234,22 @@ class HostRoleTable(NetBoxTable):
         model = HostRole
         fields = ("pk", "id", "name", "display_name", "playbook", "idempotent", "tags", "created", "last_updated")
         default_columns = ("name", "display_name", "playbook", "idempotent")
+
+
+class RotationPolicyTable(NetBoxTable):
+    instance = tables.Column(linkify=True)
+    name = tables.Column(linkify=True)
+    host_role = tables.Column(linkify=True)
+    enabled = columns.BooleanColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:rotationpolicy_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = RotationPolicy
+        fields = (
+            "pk", "id", "instance", "name", "secret_kind", "cadence_days", "next_due_at",
+            "trigger_version", "host_role", "enabled", "tags", "created", "last_updated",
+        )
+        default_columns = ("instance", "name", "secret_kind", "next_due_at", "host_role", "enabled")
 
 
 class HostRoleParamTable(NetBoxTable):

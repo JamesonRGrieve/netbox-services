@@ -13,7 +13,7 @@ from .models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
     CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
     HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 
@@ -281,6 +281,24 @@ class HostRoleFilterSet(NetBoxModelFilterSet):
         return queryset.filter(
             Q(name__icontains=value) | Q(display_name__icontains=value) | Q(description__icontains=value)
         )
+
+
+class RotationPolicyFilterSet(_InstanceChildFilterMixin):
+    host_role_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="host_role", queryset=HostRole.objects.all(), label="Host Role (ID)"
+    )
+    consumer_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="consumers", queryset=ServiceInstance.objects.all(), label="Consumer (ID)"
+    )
+
+    class Meta:
+        model = RotationPolicy
+        fields = ["id", "name", "secret_kind", "enabled"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(
+            Q(name__icontains=value) | Q(secret_kind__icontains=value) | Q(openbao_path__icontains=value)
+        ).distinct()
 
 
 class HostRoleParamFilterSet(_RoleChildFilterMixin):

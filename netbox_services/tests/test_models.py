@@ -15,7 +15,7 @@ from ..choices import (
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
     CatalogToken, HAMirror, HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration,
-    IntegrationCatalog, IntegrationCatalogParam, IntegrationParam, ServiceInstanceConfigValue,
+    IntegrationCatalog, IntegrationCatalogParam, IntegrationParam, RotationPolicy, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 from .utils import make_assignment, make_catalog, make_instance, make_role, make_vm
@@ -79,6 +79,49 @@ class ServiceInstanceModelTest(TestCase):
         svc = Service.objects.create(name="forgejo-web", protocol="tcp", ports=[3000], parent=inst.parent)
         inst.listeners.add(svc)
         self.assertEqual(list(inst.listeners.all()), [svc])
+
+
+class RotationPolicyModelTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.catalog = make_catalog("postgres")
+        cls.instance = make_instance(cls.catalog, hostname="postgres")
+        cls.consumer = make_instance(make_catalog("forgejo"), hostname="forgejo")
+        cls.role = make_role("rotate-postgres-role")
+
+    def test_create_consumer_fanout_and_url(self):
+        policy = RotationPolicy.objects.create(
+            instance=self.instance, name="forgejo-db", secret_kind="database-password",
+            openbao_path="secret/data/postgres/forgejo", cadence_days=90, host_role=self.role,
+        )
+        policy.consumers.add(self.consumer)
+        self.assertEqual(list(policy.consumers.all()), [self.consumer])
+        self.assertIn("/plugins/services/rotation-policies/", policy.get_absolute_url())
+        self.assertIn("forgejo-db", str(policy))
+
+    def test_unique_per_instance(self):
+        RotationPolicy.objects.create(
+            instance=self.instance, name="role-password", secret_kind="database-password",
+            openbao_path="secret/data/postgres/app", host_role=self.role,
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            RotationPolicy.objects.create(
+                instance=self.instance, name="role-password", secret_kind="database-password",
+                openbao_path="secret/data/postgres/other", host_role=self.role,
+            )
+
+    def test_reject_inline_secret_and_invalid_schedule(self):
+        with self.assertRaises(ValidationError):
+            RotationPolicy(
+                instance=self.instance, name="bad", secret_kind="token",
+                openbao_path="literal-secret", host_role=self.role,
+            ).full_clean()
+        with self.assertRaises(ValidationError):
+            RotationPolicy(
+                instance=self.instance, name="bad-schedule", secret_kind="token",
+                openbao_path="secret/data/app/token", next_due_at="2026-08-01T00:00:00Z",
+                host_role=self.role,
+            ).full_clean()
 
 
 class IntegrationCardinalityTest(TestCase):
@@ -262,9 +305,15 @@ class CatalogConfigParamModelTest(TestCase):
         cls.p_bool = CatalogConfigParam.objects.create(
             catalog=cls.forgejo, key="registration_open", value_type=IntegrationParamValueTypeChoices.BOOL,
         )
+        cls.p_float = CatalogConfigParam.objects.create(
+            catalog=cls.forgejo, key="threshold", value_type=IntegrationParamValueTypeChoices.FLOAT,
+        )
+        cls.p_map = CatalogConfigParam.objects.create(
+            catalog=cls.forgejo, key="settings", value_type=IntegrationParamValueTypeChoices.MAP,
+        )
         cls.p_secret = CatalogConfigParam.objects.create(
             catalog=cls.forgejo, key="smtp_password",
-            value_type=IntegrationParamValueTypeChoices.SECRET_REF, secret=True,
+            value_type=IntegrationParamValueTypeChoices.SECRET, secret=True,
         )
         cls.instance = make_instance(cls.forgejo, hostname="forgejo")
 
@@ -311,6 +360,20 @@ class CatalogConfigParamModelTest(TestCase):
         with self.assertRaises(ValidationError):
             ServiceInstanceConfigValue(instance=self.instance, param=self.p_url, value="not a url").full_clean()
         ServiceInstanceConfigValue(instance=self.instance, param=self.p_url, value="https://forgejo.example/").full_clean()
+
+    def test_float_is_finite(self):
+        ServiceInstanceConfigValue(instance=self.instance, param=self.p_float, value="0.75").full_clean()
+        for value in ("lots", "nan", "inf"):
+            with self.assertRaises(ValidationError):
+                ServiceInstanceConfigValue(instance=self.instance, param=self.p_float, value=value).full_clean()
+
+    def test_flat_map_requires_unique_key_value_lines(self):
+        ServiceInstanceConfigValue(
+            instance=self.instance, param=self.p_map, value="region=ca\nmode=strict",
+        ).full_clean()
+        for value in ("missing-separator", "=missing-key", "region=ca\nregion=us"):
+            with self.assertRaises(ValidationError):
+                ServiceInstanceConfigValue(instance=self.instance, param=self.p_map, value=value).full_clean()
 
     def test_reject_inline_secret(self):
         for inline in ("https://example.com/token", "user@example.com", "literaltoken"):

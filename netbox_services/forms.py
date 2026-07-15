@@ -19,7 +19,7 @@ from .models import (
     CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
     HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
     IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
-    ServiceInstanceExtension,
+    RotationPolicy, ServiceInstanceExtension,
 )
 
 
@@ -250,6 +250,25 @@ class HostRoleForm(NetBoxModelForm):
         fields = ["name", "display_name", "description", "playbook", "ansible_tags", "idempotent", "tags"]
 
 
+class RotationPolicyForm(NetBoxModelForm):
+    instance = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
+    host_role = DynamicModelChoiceField(queryset=HostRole.objects.all())
+    consumers = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False)
+    fieldsets = (
+        FieldSet("instance", "name", "secret_kind", "openbao_path", "enabled", name="Secret"),
+        FieldSet("cadence_days", "last_rotated_at", "next_due_at", "trigger_version", name="Intent"),
+        FieldSet("host_role", "consumers", "semaphore_schedule_ref", name="Orchestration"),
+    )
+
+    class Meta:
+        model = RotationPolicy
+        fields = [
+            "instance", "name", "secret_kind", "openbao_path", "cadence_days", "last_rotated_at",
+            "next_due_at", "trigger_version", "host_role", "consumers", "semaphore_schedule_ref",
+            "enabled", "tags",
+        ]
+
+
 class HostRoleParamForm(NetBoxModelForm):
     role = DynamicModelChoiceField(queryset=HostRole.objects.all())
     fieldsets = (
@@ -436,6 +455,15 @@ class HostRoleFilterForm(NetBoxModelFilterSetForm):
     model = HostRole
     idempotent = forms.NullBooleanField(required=False)
     tag = TagFilterField(HostRole)
+
+
+class RotationPolicyFilterForm(NetBoxModelFilterSetForm):
+    model = RotationPolicy
+    instance_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Instance")
+    host_role_id = DynamicModelMultipleChoiceField(queryset=HostRole.objects.all(), required=False, label="Host Role")
+    consumer_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Consumer")
+    enabled = forms.NullBooleanField(required=False)
+    tag = TagFilterField(RotationPolicy)
 
 
 class HostRoleParamFilterForm(NetBoxModelFilterSetForm):

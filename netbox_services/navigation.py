@@ -54,6 +54,7 @@ menu = PluginMenu(
             "Host Roles",
             (
                 _item("hostrole", "Host Roles"),
+                _item("rotationpolicy", "Rotation Policies"),
                 _item("hostroleparam", "Host Role Params"),
                 _item("hostroleassignment", "Host Role Assignments"),
                 _item("hostroleassignmentvar", "Assignment Vars"),

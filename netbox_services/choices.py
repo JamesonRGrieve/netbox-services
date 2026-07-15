@@ -77,14 +77,17 @@ class ExtensionKindChoices(ChoiceSet):
 
 
 class IntegrationParamValueTypeChoices(ChoiceSet):
-    """Rendered type of a per-edge integration config param value. ``list`` is newline-delimited
-    and order-preserving; ``secret_ref`` is an OpenBao path reference (never the secret value —
-    the value resolves at apply via the same OpenBao read the tokens use)."""
+    """Rendered typed value. Lists and flat string maps use newline-delimited storage; secrets
+    are OpenBao path references, never secret values. ``secret_ref`` remains as a compatibility
+    spelling for existing integration rows while manifests use canonical ``secret``."""
     STRING = "string"
     INT = "int"
     BOOL = "bool"
     URL = "url"
     LIST = "list"
+    MAP = "map"
+    FLOAT = "float"
+    SECRET = "secret"
     SECRET_REF = "secret_ref"
     CHOICES = [
         (STRING, "String", "gray"),
@@ -92,5 +95,8 @@ class IntegrationParamValueTypeChoices(ChoiceSet):
         (BOOL, "Boolean", "purple"),
         (URL, "URL", "cyan"),
         (LIST, "List", "green"),
+        (MAP, "Map", "teal"),
+        (FLOAT, "Float", "orange"),
+        (SECRET, "Secret", "red"),
         (SECRET_REF, "Secret ref", "red"),
     ]
