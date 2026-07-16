@@ -239,6 +239,7 @@ class HostRoleTable(NetBoxTable):
 class RotationPolicyTable(NetBoxTable):
     instance = tables.Column(linkify=True)
     name = tables.Column(linkify=True)
+    secret_kind = columns.ChoiceFieldColumn()
     host_role = tables.Column(linkify=True)
     enabled = columns.BooleanColumn()
     tags = columns.TagColumn(url_name="plugins:netbox_services:rotationpolicy_list")

@@ -263,7 +263,7 @@ class HostRoleSerializer(NetBoxModelSerializer):
 class RotationPolicySerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:rotationpolicy-detail")
     instance = ServiceInstanceSerializer(nested=True)
-    host_role = HostRoleSerializer(nested=True)
+    host_role = HostRoleSerializer(nested=True, required=False, allow_null=True)
     consumers = SerializedPKRelatedField(
         queryset=ServiceInstance.objects.all(), serializer=ServiceInstanceSerializer,
         nested=True, required=False, many=True,

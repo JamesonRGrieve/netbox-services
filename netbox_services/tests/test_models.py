@@ -10,7 +10,7 @@ from ipam.models import Service
 from utilities.testing import create_test_device
 from ..choices import (
     ExtensionKindChoices, HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
-    ServiceInstanceStatusChoices,
+    SecretKindChoices, ServiceInstanceStatusChoices,
 )
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
@@ -91,37 +91,49 @@ class RotationPolicyModelTest(TestCase):
 
     def test_create_consumer_fanout_and_url(self):
         policy = RotationPolicy.objects.create(
-            instance=self.instance, name="forgejo-db", secret_kind="database-password",
+            instance=self.instance, name="forgejo-db", secret_kind=SecretKindChoices.DB_SERVICE_ACCOUNT,
             openbao_path="secret/data/postgres/forgejo", cadence_days=90, host_role=self.role,
         )
         policy.consumers.add(self.consumer)
         self.assertEqual(list(policy.consumers.all()), [self.consumer])
         self.assertIn("/plugins/services/rotation-policies/", policy.get_absolute_url())
         self.assertIn("forgejo-db", str(policy))
+        self.assertEqual(policy.get_secret_kind_color(), SecretKindChoices.colors.get("db_service_account"))
 
     def test_unique_per_instance(self):
         RotationPolicy.objects.create(
-            instance=self.instance, name="role-password", secret_kind="database-password",
+            instance=self.instance, name="role-password", secret_kind=SecretKindChoices.DB_SERVICE_ACCOUNT,
             openbao_path="secret/data/postgres/app", host_role=self.role,
         )
         with self.assertRaises(IntegrityError), transaction.atomic():
             RotationPolicy.objects.create(
-                instance=self.instance, name="role-password", secret_kind="database-password",
+                instance=self.instance, name="role-password", secret_kind=SecretKindChoices.DB_SERVICE_ACCOUNT,
                 openbao_path="secret/data/postgres/other", host_role=self.role,
             )
 
     def test_reject_inline_secret_and_invalid_schedule(self):
         with self.assertRaises(ValidationError):
             RotationPolicy(
-                instance=self.instance, name="bad", secret_kind="token",
+                instance=self.instance, name="bad", secret_kind=SecretKindChoices.API_TOKEN,
                 openbao_path="literal-secret", host_role=self.role,
             ).full_clean()
         with self.assertRaises(ValidationError):
             RotationPolicy(
-                instance=self.instance, name="bad-schedule", secret_kind="token",
+                instance=self.instance, name="bad-schedule", secret_kind=SecretKindChoices.API_TOKEN,
                 openbao_path="secret/data/app/token", next_due_at="2026-08-01T00:00:00Z",
                 host_role=self.role,
             ).full_clean()
+
+    def test_host_role_optional_for_on_demand_rotation(self):
+        # No automation yet: a rotation policy may be declared with no host_role and no cadence
+        # (on-demand/manual only) — SoT-first intent ahead of its automation.
+        policy = RotationPolicy(
+            instance=self.instance, name="manual-only", secret_kind=SecretKindChoices.SEAL_KEY,
+            openbao_path="secret/data/openbao/seal",
+        )
+        policy.full_clean()
+        policy.save()
+        self.assertIsNone(policy.host_role)
 
 
 class IntegrationCardinalityTest(TestCase):

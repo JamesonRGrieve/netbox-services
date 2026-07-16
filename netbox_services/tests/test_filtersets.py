@@ -3,7 +3,7 @@
 from django.test import TestCase
 from ..choices import (
     ExtensionKindChoices, HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
-    ServiceInstanceStatusChoices,
+    SecretKindChoices, ServiceInstanceStatusChoices,
 )
 from ..filtersets import (
     CatalogConfigParamFilterSet, CatalogExtensionFilterSet, HostRoleAssignmentFilterSet,
@@ -310,7 +310,7 @@ class RotationPolicyFilterTest(TestCase):
         for i, enabled in enumerate((True, False)):
             policy = RotationPolicy.objects.create(
                 instance=make_instance(catalog, hostname=f"postgres-{i}"), name=f"role-{i}",
-                secret_kind="database-password", openbao_path=f"secret/data/postgres/role-{i}",
+                secret_kind=SecretKindChoices.DB_SERVICE_ACCOUNT, openbao_path=f"secret/data/postgres/role-{i}",
                 host_role=cls.role, enabled=enabled,
             )
             if i == 0:

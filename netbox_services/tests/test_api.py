@@ -6,7 +6,7 @@ import unittest
 
 from django.urls import reverse
 from utilities.testing import APIViewTestCases, create_test_device
-from ..choices import ExtensionKindChoices, IntegrationParamValueTypeChoices
+from ..choices import ExtensionKindChoices, IntegrationParamValueTypeChoices, SecretKindChoices
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
     CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
@@ -425,13 +425,13 @@ class RotationPolicyAPITest(_CRUD):
         consumer = make_instance(make_catalog("forgejo"), hostname="forgejo")
         for i in range(3):
             policy = RotationPolicy.objects.create(
-                instance=instances[i], name=f"existing-{i}", secret_kind="database-password",
+                instance=instances[i], name=f"existing-{i}", secret_kind=SecretKindChoices.DB_SERVICE_ACCOUNT,
                 openbao_path=f"secret/data/postgres/existing-{i}", host_role=role,
             )
             policy.consumers.add(consumer)
         cls.create_data = [
             {
-                "instance": instances[i].pk, "name": f"new-{i}", "secret_kind": "database-password",
+                "instance": instances[i].pk, "name": f"new-{i}", "secret_kind": SecretKindChoices.DB_SERVICE_ACCOUNT,
                 "openbao_path": f"secret/data/postgres/new-{i}", "host_role": role.pk,
                 "consumers": [consumer.pk], "cadence_days": 90,
             }

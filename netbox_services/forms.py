@@ -252,7 +252,7 @@ class HostRoleForm(NetBoxModelForm):
 
 class RotationPolicyForm(NetBoxModelForm):
     instance = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
-    host_role = DynamicModelChoiceField(queryset=HostRole.objects.all())
+    host_role = DynamicModelChoiceField(queryset=HostRole.objects.all(), required=False)
     consumers = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False)
     fieldsets = (
         FieldSet("instance", "name", "secret_kind", "openbao_path", "enabled", name="Secret"),

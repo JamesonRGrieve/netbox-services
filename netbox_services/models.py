@@ -35,7 +35,7 @@ from ipam.choices import ServiceProtocolChoices
 from netbox.models import NetBoxModel
 from .choices import (
     DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
-    IntegrationParamValueTypeChoices, ProviderScopeChoices, ServiceInstanceStatusChoices,
+    IntegrationParamValueTypeChoices, ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
 )
 
 # Content types a ServiceInstance may be installed onto (a guest VM or a raw-OS device).
@@ -844,21 +844,40 @@ class HostRole(NetBoxModel):
 
 
 class RotationPolicy(NetBoxModel):
-    """Run intent for one service-owned secret rotation. NetBox stores only the OpenBao path and
-    orchestration metadata; the referenced atomic host role performs the operation and updates all
-    declared consumer instances before recording completion."""
+    """Run intent for one service-owned secret rotation: rotate ``secret_kind`` at ``openbao_path``
+    on ``cadence_days`` (or on-demand only, when null), fanning the update out to every declared
+    ``consumers`` instance before recording completion. NetBox stores only the OpenBao path and
+    orchestration metadata — never the secret value.
+
+    ``host_role`` (not a bare ``playbook`` string) is the atomic unit that performs the rotation:
+    an FK reuses the same referential integrity + typed :class:`HostRoleParam` var schema every
+    other host-level operation in this file already gets, instead of a stringly-typed path that can
+    drift or typo (mirrors why ``Integration``/``HAMirror`` are FKs, not name strings). It is
+    **nullable** so a rotation can be declared as intent (a secret that must eventually rotate,
+    with a cadence or not) before its automation exists — the SoT-first pattern used elsewhere in
+    this plugin (e.g. a required catalog param with no default yet)."""
 
     instance = models.ForeignKey(ServiceInstance, on_delete=models.CASCADE, related_name="rotation_policies")
     name = models.SlugField(max_length=100)
-    secret_kind = models.CharField(max_length=100)
+    secret_kind = models.CharField(max_length=32, choices=SecretKindChoices)
     openbao_path = models.CharField(max_length=255)
-    cadence_days = models.PositiveIntegerField(null=True, blank=True)
+    cadence_days = models.PositiveIntegerField(null=True, blank=True, help_text="Null = on-demand/manual only.")
     last_rotated_at = models.DateTimeField(null=True, blank=True)
     next_due_at = models.DateTimeField(null=True, blank=True)
-    trigger_version = models.PositiveBigIntegerField(default=0)
-    host_role = models.ForeignKey(HostRole, on_delete=models.PROTECT, related_name="rotation_policies")
-    consumers = models.ManyToManyField(ServiceInstance, related_name="consumed_rotation_policies", blank=True)
-    semaphore_schedule_ref = models.CharField(max_length=255, blank=True)
+    trigger_version = models.PositiveBigIntegerField(
+        default=0, help_text="Incremented to force an out-of-cadence run; automation writes it back.",
+    )
+    host_role = models.ForeignKey(
+        HostRole, on_delete=models.PROTECT, null=True, blank=True, related_name="rotation_policies",
+        help_text="The atomic rotate_*.yml role that performs this. Null = no automation yet (on-demand only).",
+    )
+    consumers = models.ManyToManyField(
+        ServiceInstance, related_name="consumed_rotation_policies", blank=True,
+        help_text="Every instance that must be updated in lockstep when this secret rotates.",
+    )
+    semaphore_schedule_ref = models.CharField(
+        max_length=255, blank=True, help_text="Semaphore schedule id/name driving cadence_days (blank = unscheduled).",
+    )
     enabled = models.BooleanField(default=True)
 
     class Meta:
@@ -875,6 +894,9 @@ class RotationPolicy(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_services:rotationpolicy", args=[self.pk])
+
+    def get_secret_kind_color(self):
+        return SecretKindChoices.colors.get(self.secret_kind)
 
     def clean(self):
         super().clean()
