@@ -77,9 +77,15 @@ class ExtensionKindChoices(ChoiceSet):
 
 
 class IntegrationParamValueTypeChoices(ChoiceSet):
-    """Rendered typed value. Lists and flat string maps use newline-delimited storage; secrets
-    are OpenBao path references, never secret values. ``secret_ref`` remains as a compatibility
-    spelling for existing integration rows while manifests use canonical ``secret``."""
+    """Rendered typed value. ``list`` is newline-delimited (order preserved); ``map`` is a flat
+    newline-delimited ``key=value`` set (bounded — not a nested/generic blob, so it stays clear of
+    DESIGN.md §6's data-blob prohibition; the same shape the Go providers already justify as an
+    escape hatch, e.g. ``postgres_config.extra_params``). Secrets are OpenBao path references,
+    never secret values (enforced independently of ``value_type`` by the ``secret`` boolean on the
+    catalog-param row — see ``validate_integration_param_value``). ``SECRET`` is canonical (100% of
+    real tofu-services manifest usage — 187/187 ``secret``-kind params, 0 ``secret_ref``); ``SECRET_REF``
+    is kept as a compatibility alias so any already-seeded row on the old spelling stays valid — it
+    costs nothing and both resolve identically in the validator, so there is no drift to reconcile."""
     STRING = "string"
     INT = "int"
     BOOL = "bool"
@@ -99,4 +105,33 @@ class IntegrationParamValueTypeChoices(ChoiceSet):
         (FLOAT, "Float", "orange"),
         (SECRET, "Secret", "red"),
         (SECRET_REF, "Secret ref", "red"),
+    ]
+
+
+class SecretKindChoices(ChoiceSet):
+    """Category of secret a :class:`RotationPolicy` rotates — the vocabulary the atomic
+    ``rotate_*.yml`` host role dispatches on. Deliberately enumerated (not free text) so a
+    rotation policy's kind is queryable/filterable like every other categorical attribute in
+    this plugin; extend the set the same way ``IntegrationParamValueTypeChoices`` grows."""
+    ADMIN_PASSWORD = "admin_password"
+    API_TOKEN = "api_token"
+    SIGNING_KEY = "signing_key"
+    OIDC_CLIENT_SECRET = "oidc_client_secret"
+    DKIM_KEY = "dkim_key"
+    ENCRYPTION_KEY = "encryption_key"
+    TLS_KEYPAIR = "tls_keypair"
+    DB_SERVICE_ACCOUNT = "db_service_account"
+    SEAL_KEY = "seal_key"
+    APPROLE_SECRET_ID = "approle_secret_id"
+    CHOICES = [
+        (ADMIN_PASSWORD, "Admin password", "red"),
+        (API_TOKEN, "API token", "blue"),
+        (SIGNING_KEY, "Signing key", "purple"),
+        (OIDC_CLIENT_SECRET, "OIDC client secret", "orange"),
+        (DKIM_KEY, "DKIM key", "cyan"),
+        (ENCRYPTION_KEY, "Encryption key", "indigo"),
+        (TLS_KEYPAIR, "TLS keypair", "green"),
+        (DB_SERVICE_ACCOUNT, "DB service account", "teal"),
+        (SEAL_KEY, "Seal key", "yellow"),
+        (APPROLE_SECRET_ID, "AppRole secret id", "gray"),
     ]
