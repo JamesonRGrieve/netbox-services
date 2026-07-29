@@ -7,13 +7,15 @@ from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 from .choices import (
     DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
-    IntegrationParamValueTypeChoices, ProviderScopeChoices, ServiceInstanceStatusChoices,
+    IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
+    ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
-    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
-    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
+    RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 
@@ -332,3 +334,75 @@ class HostRoleAssignmentVarFilterSet(_AssignmentChildFilterMixin):
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(value__icontains=value) | Q(param__key__icontains=value))
+
+
+class CatalogMcpServerFilterSet(_CatalogChildFilterMixin):
+    transport = django_filters.MultipleChoiceFilter(choices=McpTransportChoices)
+    capability = django_filters.MultipleChoiceFilter(choices=McpCapabilityChoices)
+    source_type = django_filters.MultipleChoiceFilter(choices=McpSourceTypeChoices)
+
+    class Meta:
+        model = CatalogMcpServer
+        fields = ["id", "name", "transport", "capability", "source_type", "default_version"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(
+            Q(name__icontains=value) | Q(source__icontains=value) | Q(description__icontains=value)
+        )
+
+
+class _CatalogMcpChildFilterMixin(NetBoxModelFilterSet):
+    catalog_mcp_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="catalog_mcp", queryset=CatalogMcpServer.objects.all(), label="Catalog MCP Server (ID)"
+    )
+
+    class Meta:
+        abstract = True
+
+
+class CatalogMcpServerParamFilterSet(_CatalogMcpChildFilterMixin):
+    value_type = django_filters.MultipleChoiceFilter(choices=IntegrationParamValueTypeChoices)
+
+    class Meta:
+        model = CatalogMcpServerParam
+        fields = ["id", "key", "value_type", "required", "secret"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(key__icontains=value) | Q(description__icontains=value))
+
+
+class McpServerFilterSet(_CatalogMcpChildFilterMixin):
+    service_instance_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="service_instance", queryset=ServiceInstance.objects.all(), label="Service Instance (ID)"
+    )
+    status = django_filters.MultipleChoiceFilter(choices=ServiceInstanceStatusChoices)
+    transport = django_filters.MultipleChoiceFilter(choices=McpTransportChoices)
+    # Trust level lives on the catalog row; expose it here so "show me every read_write companion"
+    # is one query rather than a join the caller has to know to make.
+    capability = django_filters.MultipleChoiceFilter(
+        field_name="catalog_mcp__capability", choices=McpCapabilityChoices, label="Capability"
+    )
+
+    class Meta:
+        model = McpServer
+        fields = ["id", "version", "status", "transport", "bind_address", "autostart", "managed"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(
+            Q(catalog_mcp__name__icontains=value)
+            | Q(bind_address__icontains=value)
+            | Q(version__icontains=value)
+        ).distinct()
+
+
+class McpServerParamFilterSet(NetBoxModelFilterSet):
+    mcp_server_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="mcp_server", queryset=McpServer.objects.all(), label="MCP Server (ID)"
+    )
+
+    class Meta:
+        model = McpServerParam
+        fields = ["id", "key", "value"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(key__icontains=value) | Q(value__icontains=value))

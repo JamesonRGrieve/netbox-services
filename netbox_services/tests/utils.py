@@ -4,7 +4,9 @@ idempotent ClusterType/Cluster (the same pattern as netbox-guests); ``make_catal
 ``make_instance`` build the plugin's own rows. A ``dcim.Device`` parent uses the framework's
 ``create_test_device``. ``make_role`` / ``make_assignment`` build the host-role layer."""
 from virtualization.models import Cluster, ClusterType, VirtualMachine
-from ..models import HostRole, HostRoleAssignment, ServiceCatalog, ServiceInstance
+from ..models import (
+    CatalogMcpServer, HostRole, HostRoleAssignment, McpServer, ServiceCatalog, ServiceInstance,
+)
 
 
 def make_vm(name, cluster_name="core"):
@@ -37,3 +39,19 @@ def make_role(name, **kwargs):
 def make_assignment(role, target=None, **kwargs):
     target = target or make_vm(f"vm-{role.name}")
     return HostRoleAssignment.objects.create(role=role, target=target, **kwargs)
+
+
+def make_catalog_mcp(catalog, name="netbox-mcp-server", **kwargs):
+    defaults = {
+        "source_type": "git",
+        "source": "https://github.com/netboxlabs/netbox-mcp-server.git",
+        "transport": "http",
+        "capability": "read_only",
+    }
+    defaults.update(kwargs)
+    return CatalogMcpServer.objects.create(catalog=catalog, name=name, **defaults)
+
+
+def make_mcp_server(instance, catalog_mcp=None, **kwargs):
+    catalog_mcp = catalog_mcp or make_catalog_mcp(instance.catalog)
+    return McpServer.objects.create(service_instance=instance, catalog_mcp=catalog_mcp, **kwargs)

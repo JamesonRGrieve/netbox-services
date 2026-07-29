@@ -60,6 +60,15 @@ menu = PluginMenu(
                 _item("hostroleassignmentvar", "Assignment Vars"),
             ),
         ),
+        (
+            "MCP Companions",
+            (
+                _item("catalogmcpserver", "Catalog MCP Servers"),
+                _item("catalogmcpserverparam", "Catalog MCP Params"),
+                _item("mcpserver", "MCP Servers"),
+                _item("mcpserverparam", "MCP Server Params"),
+            ),
+        ),
     ),
     icon_class="mdi mdi-application-cog",
 )

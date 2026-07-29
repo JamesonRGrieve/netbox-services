@@ -35,7 +35,8 @@ from ipam.choices import ServiceProtocolChoices
 from netbox.models import NetBoxModel
 from .choices import (
     DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
-    IntegrationParamValueTypeChoices, ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
+    IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
+    ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
 )
 
 # Content types a ServiceInstance may be installed onto (a guest VM or a raw-OS device).
@@ -1030,3 +1031,278 @@ class HostRoleAssignmentVar(NetBoxModel):
     def clean(self):
         super().clean()
         validate_host_role_assignment_var(self)
+
+
+# --------------------------------------------------------------------- MCP companion layer
+
+class CatalogMcpServer(NetBoxModel):
+    """An **MCP companion server** a service *type* can have bolted on — the catalog half of the
+    companion pattern (e.g. ``netbox-mcp-server`` for the NetBox catalog entry, ``semaphore-mcp``
+    for Semaphore). Declares what the companion *is*; :class:`McpServer` declares that a specific
+    instance runs one.
+
+    Deliberately **not** a :class:`CatalogExtension`: an extension is an in-process add-on installed
+    *into* the app (a WordPress plugin, a NetBox plugin) with only kind/name/version. A companion is
+    a **separate daemon** with its own upstream source, its own listener, its own credential, its own
+    unit lifecycle and its own trust level — genuinely divergent behaviour, so it gets its own thin
+    pair rather than being forced into the extension model.
+
+    ``source`` is a *reference* (repo URL / package name / image), never vendored content."""
+
+    catalog = models.ForeignKey(ServiceCatalog, on_delete=models.CASCADE, related_name="mcp_servers")
+    name = models.CharField(max_length=200, help_text="Companion name (e.g. netbox-mcp-server).")
+    source_type = models.CharField(max_length=16, choices=McpSourceTypeChoices)
+    source = models.CharField(
+        max_length=255, help_text="Reference only: repo URL, PyPI package, or OCI image."
+    )
+    default_version = models.CharField(
+        max_length=100, blank=True, help_text="Version the type pins by default (blank = latest)."
+    )
+    transport = models.CharField(
+        max_length=16, choices=McpTransportChoices, default=McpTransportChoices.HTTP
+    )
+    default_port = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Conventional port for http transport. Advisory only — the realized listener is an "
+                  "ipam.Service on the McpServer row, never a port column here.",
+    )
+    capability = models.CharField(
+        max_length=16, choices=McpCapabilityChoices, default=McpCapabilityChoices.READ_ONLY,
+        help_text="Trust level over the fronted service. Upstream read-only servers MUST stay read_only.",
+    )
+    upstream_url = models.URLField(blank=True, help_text="Project homepage, for provenance.")
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["catalog", "name"]
+        verbose_name = "Catalog MCP Server"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["catalog", "name"],
+                name="netbox_services_catalogmcpserver_unique_catalog_name",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.catalog.name}: {self.name}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:catalogmcpserver", args=[self.pk])
+
+    def get_transport_color(self):
+        return McpTransportChoices.colors.get(self.transport)
+
+    def get_capability_color(self):
+        return McpCapabilityChoices.colors.get(self.capability)
+
+    def get_source_type_color(self):
+        return McpSourceTypeChoices.colors.get(self.source_type)
+
+    def clean(self):
+        super().clean()
+        if self.transport == McpTransportChoices.STDIO and self.default_port:
+            raise ValidationError("A stdio companion has no listener; leave default_port unset.")
+
+
+class CatalogMcpServerParam(NetBoxModel):
+    """A config/env param an MCP companion *type* accepts — the typed schema for the knobs that
+    would otherwise become an untyped env blob (``ENABLE_PLUGIN_DISCOVERY``, ``LOG_LEVEL``,
+    ``VERIFY_SSL``, …). Exact sibling of :class:`IntegrationCatalogParam`: ``default`` is the catalog
+    default and an instance stores an :class:`McpServerParam` row **only when it overrides** it (or
+    for a required param with no default). ``secret`` ⇒ the value is an OpenBao path reference."""
+
+    catalog_mcp = models.ForeignKey(CatalogMcpServer, on_delete=models.CASCADE, related_name="params")
+    key = models.CharField(max_length=100, help_text="Param key (e.g. ENABLE_PLUGIN_DISCOVERY).")
+    value_type = models.CharField(max_length=16, choices=IntegrationParamValueTypeChoices)
+    required = models.BooleanField(default=False)
+    default = models.CharField(
+        max_length=255, blank=True,
+        help_text="Catalog default; an instance stores a row only when it overrides this.",
+    )
+    secret = models.BooleanField(
+        default=False, help_text="When set, the value is an OpenBao path, never an inline value."
+    )
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["catalog_mcp", "key"]
+        verbose_name = "Catalog MCP Server Param"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["catalog_mcp", "key"],
+                name="netbox_services_catalogmcpserverparam_unique_catalog_mcp_key",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.catalog_mcp}: {self.key}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:catalogmcpserverparam", args=[self.pk])
+
+    def get_value_type_color(self):
+        return IntegrationParamValueTypeChoices.colors.get(self.value_type)
+
+
+def validate_mcp_server(mcp_server):
+    """Validate an :class:`McpServer`. The companion's catalog entry must belong to the **fronted
+    instance's own service type** (you cannot bolt Semaphore's companion onto NetBox), and an
+    ``http`` companion must reference a token key that exists on the fronted instance so the unit
+    has a credential to start with. ``stdio`` companions take no listener."""
+    if not (mcp_server.service_instance_id and mcp_server.catalog_mcp_id):
+        return
+    instance_catalog_id = mcp_server.service_instance.catalog_id
+    if mcp_server.catalog_mcp.catalog_id != instance_catalog_id:
+        raise ValidationError(
+            f"MCP companion '{mcp_server.catalog_mcp.name}' is declared on service type "
+            f"'{mcp_server.catalog_mcp.catalog}', not on this instance's type "
+            f"'{mcp_server.service_instance.catalog}'."
+        )
+    transport = mcp_server.transport or mcp_server.catalog_mcp.transport
+    for field in ("token_key", "auth_token_key"):
+        key = getattr(mcp_server, field, "")
+        if not key:
+            continue
+        if not mcp_server.service_instance.openbao_paths.filter(key=key).exists():
+            raise ValidationError(
+                f"{field} '{key}' is not an InstanceOpenBaoPath key on the fronted instance "
+                f"'{mcp_server.service_instance}'."
+            )
+    if transport == McpTransportChoices.STDIO and mcp_server.bind_address:
+        raise ValidationError("A stdio companion has no listener; leave bind_address unset.")
+
+
+class McpServer(NetBoxModel):
+    """THE bolt-on resource: one MCP companion daemon running alongside ONE
+    :class:`ServiceInstance`, in its own right — its own version, listener, credential references
+    and unit lifecycle. This is the row the ``tofu-services`` ``mcp_server`` resource reads to
+    realize the venv + systemd unit.
+
+    Ports are **native ``ipam.Service`` rows** linked via ``listeners``, exactly as on
+    :class:`ServiceInstance` — no port column here. Secret *values* never live here: ``token_key``
+    and ``auth_token_key`` name :class:`InstanceOpenBaoPath` keys on the fronted instance, so the
+    companion reuses the service's existing credential records instead of duplicating them."""
+
+    service_instance = models.ForeignKey(
+        ServiceInstance, on_delete=models.CASCADE, related_name="mcp_servers",
+        help_text="The instance this companion fronts; the companion is meaningless without it.",
+    )
+    catalog_mcp = models.ForeignKey(CatalogMcpServer, on_delete=models.PROTECT, related_name="instances")
+    version = models.CharField(max_length=100, blank=True, help_text="Pinned version (blank = catalog default).")
+    transport = models.CharField(
+        max_length=16, choices=McpTransportChoices, blank=True,
+        help_text="Blank = inherit the catalog transport.",
+    )
+    status = models.CharField(
+        max_length=20, choices=ServiceInstanceStatusChoices, default=ServiceInstanceStatusChoices.STAGED
+    )
+    bind_address = models.CharField(
+        max_length=255, blank=True, help_text="Listen address for http transport (e.g. 127.0.0.1)."
+    )
+    listeners = models.ManyToManyField(
+        "ipam.Service", related_name="mcp_servers", blank=True,
+        help_text="The L4 listeners this companion exposes (ports live in IPAM).",
+    )
+    token_key = models.CharField(
+        max_length=100, blank=True,
+        help_text="InstanceOpenBaoPath key on the fronted instance holding the credential the "
+                  "companion uses to reach that service. A reference, never a value.",
+    )
+    auth_token_key = models.CharField(
+        max_length=100, blank=True,
+        help_text="InstanceOpenBaoPath key holding the companion's OWN bearer token for its http "
+                  "endpoint. Blank on an http companion means the endpoint is unauthenticated.",
+    )
+    autostart = models.BooleanField(default=True, help_text="Unit is enabled to start on boot.")
+    managed = models.BooleanField(
+        default=True, help_text="The tofu-services provider owns this companion's lifecycle."
+    )
+
+    class Meta:
+        ordering = ["service_instance", "catalog_mcp"]
+        verbose_name = "MCP Server"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["service_instance", "catalog_mcp"],
+                name="netbox_services_mcpserver_unique_instance_catalog_mcp",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.catalog_mcp.name} @ {self.service_instance}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:mcpserver", args=[self.pk])
+
+    def get_status_color(self):
+        return ServiceInstanceStatusChoices.colors.get(self.status)
+
+    @property
+    def effective_transport(self):
+        """Declared transport, falling back to the catalog default."""
+        return self.transport or self.catalog_mcp.transport
+
+    @property
+    def effective_version(self):
+        """Declared version, falling back to the catalog default (blank = track latest)."""
+        return self.version or self.catalog_mcp.default_version
+
+    @property
+    def capability(self):
+        """Trust level is a property of the companion TYPE — never overridable per instance, so an
+        instance cannot quietly widen a read-only companion into a mutating one."""
+        return self.catalog_mcp.capability
+
+    def clean(self):
+        super().clean()
+        validate_mcp_server(self)
+
+
+def validate_mcp_server_param(param):
+    """Every :class:`McpServerParam` key must be a declared :class:`CatalogMcpServerParam` on the
+    companion's catalog entry, and its ``value`` must satisfy the shared typed-value contract in
+    :func:`validate_integration_param_value` (so ``secret`` params are rejected unless they are
+    OpenBao path references)."""
+    if not (param.mcp_server_id and param.key):
+        return
+    catalog_param = CatalogMcpServerParam.objects.filter(
+        catalog_mcp=param.mcp_server.catalog_mcp_id, key=param.key
+    ).first()
+    if catalog_param is None:
+        raise ValidationError(
+            f"'{param.key}' is not a declared param of MCP companion "
+            f"'{param.mcp_server.catalog_mcp.name}'."
+        )
+    validate_integration_param_value(catalog_param, param.value)
+
+
+class McpServerParam(NetBoxModel):
+    """A per-companion config/env value on ONE :class:`McpServer`. Stored **only on override** of the
+    :class:`CatalogMcpServerParam` default (or for a required param with no default); the provider
+    merges catalog defaults with these rows for the effective environment."""
+
+    mcp_server = models.ForeignKey(McpServer, on_delete=models.CASCADE, related_name="params")
+    key = models.CharField(max_length=100, help_text="Matches a CatalogMcpServerParam.key.")
+    value = models.CharField(
+        max_length=255,
+        help_text="Rendered per value_type (list/map = newline-delimited; secret = OpenBao path).",
+    )
+
+    class Meta:
+        ordering = ["mcp_server", "key"]
+        verbose_name = "MCP Server Param"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["mcp_server", "key"], name="netbox_services_mcpserverparam_unique_mcp_server_key"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.mcp_server}: {self.key}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:mcpserverparam", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        validate_mcp_server_param(self)

@@ -27,5 +27,9 @@ router.register("rotation-policies", views.RotationPolicyViewSet)
 router.register("host-role-params", views.HostRoleParamViewSet)
 router.register("host-role-assignments", views.HostRoleAssignmentViewSet)
 router.register("host-role-assignment-vars", views.HostRoleAssignmentVarViewSet)
+router.register("catalog-mcp-servers", views.CatalogMcpServerViewSet)
+router.register("catalog-mcp-server-params", views.CatalogMcpServerParamViewSet)
+router.register("mcp-servers", views.McpServerViewSet)
+router.register("mcp-server-params", views.McpServerParamViewSet)
 
 urlpatterns = router.urls

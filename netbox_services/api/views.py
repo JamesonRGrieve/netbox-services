@@ -2,19 +2,22 @@
 from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
 from ..models import (
-    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
-    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
+    RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 from .serializers import (
     CatalogConfigParamSerializer, CatalogCredentialSerializer, CatalogExtensionSerializer,
+    CatalogMcpServerParamSerializer, CatalogMcpServerSerializer,
     CatalogSecondaryPortSerializer, CatalogTestIntegrationSerializer, CatalogTestStateSerializer,
     CatalogTokenSerializer, HAMirrorSerializer, HostRoleAssignmentSerializer,
     HostRoleAssignmentVarSerializer, HostRoleParamSerializer, HostRoleSerializer,
     IntegrationCatalogParamSerializer, IntegrationCatalogSerializer, IntegrationParamSerializer,
-    IntegrationSerializer, InstanceOpenBaoPathSerializer, RotationPolicySerializer, ServiceCatalogSerializer,
+    IntegrationSerializer, InstanceOpenBaoPathSerializer, McpServerParamSerializer, McpServerSerializer,
+    RotationPolicySerializer, ServiceCatalogSerializer,
     ServiceInstanceConfigValueSerializer, ServiceInstanceExtensionSerializer, ServiceInstanceSerializer,
 )
 
@@ -149,3 +152,29 @@ class HostRoleAssignmentVarViewSet(NetBoxModelViewSet):
     queryset = HostRoleAssignmentVar.objects.prefetch_related("assignment", "param", "tags")
     serializer_class = HostRoleAssignmentVarSerializer
     filterset_class = filtersets.HostRoleAssignmentVarFilterSet
+
+
+class CatalogMcpServerViewSet(NetBoxModelViewSet):
+    queryset = CatalogMcpServer.objects.prefetch_related("catalog", "tags")
+    serializer_class = CatalogMcpServerSerializer
+    filterset_class = filtersets.CatalogMcpServerFilterSet
+
+
+class CatalogMcpServerParamViewSet(NetBoxModelViewSet):
+    queryset = CatalogMcpServerParam.objects.prefetch_related("catalog_mcp", "tags")
+    serializer_class = CatalogMcpServerParamSerializer
+    filterset_class = filtersets.CatalogMcpServerParamFilterSet
+
+
+class McpServerViewSet(NetBoxModelViewSet):
+    queryset = McpServer.objects.prefetch_related(
+        "service_instance", "catalog_mcp", "listeners", "tags"
+    )
+    serializer_class = McpServerSerializer
+    filterset_class = filtersets.McpServerFilterSet
+
+
+class McpServerParamViewSet(NetBoxModelViewSet):
+    queryset = McpServerParam.objects.prefetch_related("mcp_server", "tags")
+    serializer_class = McpServerParamSerializer
+    filterset_class = filtersets.McpServerParamFilterSet

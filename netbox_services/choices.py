@@ -108,6 +108,41 @@ class IntegrationParamValueTypeChoices(ChoiceSet):
     ]
 
 
+class McpTransportChoices(ChoiceSet):
+    """How an MCP companion server is reached. ``stdio`` = the client spawns the process and speaks
+    over its stdin/stdout (no listener, nothing to firewall); ``http`` = Streamable HTTP on a real
+    port, which therefore needs an ``ipam.Service`` listener and a bearer token."""
+    STDIO = "stdio"
+    HTTP = "http"
+    CHOICES = [(STDIO, "stdio", "gray"), (HTTP, "Streamable HTTP", "blue")]
+
+
+class McpCapabilityChoices(ChoiceSet):
+    """The trust level an MCP companion is granted over the service it fronts. Enumerated rather
+    than a boolean because it is a **security boundary that belongs in the SoT**: the harness's
+    Bash-tool deny rules (``tofu apply*``, ``pvesh set:*``, …) do not bind MCP tool calls, so
+    "can this companion mutate?" must be an auditable, queryable attribute of the declared
+    intent — not an accident of which flags a unit file happened to be started with."""
+    READ_ONLY = "read_only"
+    READ_WRITE = "read_write"
+    CHOICES = [(READ_ONLY, "Read-only", "green"), (READ_WRITE, "Read-write", "red")]
+
+
+class McpSourceTypeChoices(ChoiceSet):
+    """Where a companion's code is fetched from — a *reference*, never vendored content (mirrors
+    ``netbox_ai.ModelCatalog.source_type``)."""
+    GIT = "git"
+    PYPI = "pypi"
+    OCI = "oci"
+    DISTRO = "distro"
+    CHOICES = [
+        (GIT, "Git", "blue"),
+        (PYPI, "PyPI", "purple"),
+        (OCI, "OCI image", "cyan"),
+        (DISTRO, "Distro package", "green"),
+    ]
+
+
 class SecretKindChoices(ChoiceSet):
     """Category of secret a :class:`RotationPolicy` rotates — the vocabulary the atomic
     ``rotate_*.yml`` host role dispatches on. Deliberately enumerated (not free text) so a

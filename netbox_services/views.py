@@ -551,3 +551,103 @@ class HostRoleAssignmentVarDeleteView(generic.ObjectDeleteView):
 class HostRoleAssignmentVarBulkDeleteView(generic.BulkDeleteView):
     queryset = models.HostRoleAssignmentVar.objects.all()
     table = tables.HostRoleAssignmentVarTable
+
+
+class CatalogMcpServerView(generic.ObjectView):
+    queryset = models.CatalogMcpServer.objects.all()
+
+
+class CatalogMcpServerListView(generic.ObjectListView):
+    queryset = models.CatalogMcpServer.objects.all()
+    table = tables.CatalogMcpServerTable
+    filterset = filtersets.CatalogMcpServerFilterSet
+    filterset_form = forms.CatalogMcpServerFilterForm
+
+
+class CatalogMcpServerEditView(generic.ObjectEditView):
+    queryset = models.CatalogMcpServer.objects.all()
+    form = forms.CatalogMcpServerForm
+
+
+class CatalogMcpServerDeleteView(generic.ObjectDeleteView):
+    queryset = models.CatalogMcpServer.objects.all()
+
+
+class CatalogMcpServerBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.CatalogMcpServer.objects.all()
+    table = tables.CatalogMcpServerTable
+
+
+class CatalogMcpServerParamView(generic.ObjectView):
+    queryset = models.CatalogMcpServerParam.objects.all()
+
+
+class CatalogMcpServerParamListView(generic.ObjectListView):
+    queryset = models.CatalogMcpServerParam.objects.all()
+    table = tables.CatalogMcpServerParamTable
+    filterset = filtersets.CatalogMcpServerParamFilterSet
+    filterset_form = forms.CatalogMcpServerParamFilterForm
+
+
+class CatalogMcpServerParamEditView(generic.ObjectEditView):
+    queryset = models.CatalogMcpServerParam.objects.all()
+    form = forms.CatalogMcpServerParamForm
+
+
+class CatalogMcpServerParamDeleteView(generic.ObjectDeleteView):
+    queryset = models.CatalogMcpServerParam.objects.all()
+
+
+class CatalogMcpServerParamBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.CatalogMcpServerParam.objects.all()
+    table = tables.CatalogMcpServerParamTable
+
+
+class McpServerView(generic.ObjectView):
+    queryset = models.McpServer.objects.all()
+
+
+class McpServerListView(generic.ObjectListView):
+    queryset = models.McpServer.objects.all()
+    table = tables.McpServerTable
+    filterset = filtersets.McpServerFilterSet
+    filterset_form = forms.McpServerFilterForm
+
+
+class McpServerEditView(generic.ObjectEditView):
+    queryset = models.McpServer.objects.all()
+    form = forms.McpServerForm
+
+
+class McpServerDeleteView(generic.ObjectDeleteView):
+    queryset = models.McpServer.objects.all()
+
+
+class McpServerBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.McpServer.objects.all()
+    table = tables.McpServerTable
+
+
+class McpServerParamView(generic.ObjectView):
+    queryset = models.McpServerParam.objects.all()
+
+
+class McpServerParamListView(generic.ObjectListView):
+    queryset = models.McpServerParam.objects.all()
+    table = tables.McpServerParamTable
+    filterset = filtersets.McpServerParamFilterSet
+    filterset_form = forms.McpServerParamFilterForm
+
+
+class McpServerParamEditView(generic.ObjectEditView):
+    queryset = models.McpServerParam.objects.all()
+    form = forms.McpServerParamForm
+
+
+class McpServerParamDeleteView(generic.ObjectDeleteView):
+    queryset = models.McpServerParam.objects.all()
+
+
+class McpServerParamBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.McpServerParam.objects.all()
+    table = tables.McpServerParamTable

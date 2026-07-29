@@ -12,10 +12,11 @@ from netbox.api.fields import ContentTypeField, SerializedPKRelatedField
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from ..models import (
-    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
-    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
+    RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 
@@ -328,3 +329,65 @@ class HostRoleAssignmentVarSerializer(NetBoxModelSerializer):
         model = HostRoleAssignmentVar
         fields = ["id", "url", "display", "assignment", "param", "value", *_META]
         brief_fields = ["id", "url", "display", "param", "value"]
+
+
+class CatalogMcpServerSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:catalogmcpserver-detail")
+    catalog = ServiceCatalogSerializer(nested=True)
+
+    class Meta:
+        model = CatalogMcpServer
+        fields = [
+            "id", "url", "display", "catalog", "name", "source_type", "source", "default_version",
+            "transport", "default_port", "capability", "upstream_url", "description", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "name", "transport", "capability"]
+
+
+class CatalogMcpServerParamSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name="plugins-api:netbox_services-api:catalogmcpserverparam-detail"
+    )
+    catalog_mcp = CatalogMcpServerSerializer(nested=True)
+
+    class Meta:
+        model = CatalogMcpServerParam
+        fields = [
+            "id", "url", "display", "catalog_mcp", "key", "value_type", "required", "default",
+            "secret", "description", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "key", "value_type", "required"]
+
+
+class McpServerSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:mcpserver-detail")
+    service_instance = ServiceInstanceSerializer(nested=True)
+    catalog_mcp = CatalogMcpServerSerializer(nested=True)
+    listeners = SerializedPKRelatedField(
+        queryset=Service.objects.all(), serializer=ServiceSerializer, nested=True,
+        required=False, many=True,
+    )
+    # Effective values so the tofu-services provider does not have to re-implement the
+    # instance-overrides-catalog fallback, and capability so it is visible without a second fetch.
+    effective_transport = serializers.CharField(read_only=True)
+    effective_version = serializers.CharField(read_only=True)
+    capability = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = McpServer
+        fields = [
+            "id", "url", "display", "service_instance", "catalog_mcp", "version", "transport",
+            "effective_version", "effective_transport", "capability", "status", "bind_address",
+            "listeners", "token_key", "auth_token_key", "autostart", "managed", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "catalog_mcp", "status", "capability"]
+
+
+class McpServerParamSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:mcpserverparam-detail")
+    mcp_server = McpServerSerializer(nested=True)
+
+    class Meta:
+        model = McpServerParam
+        fields = ["id", "url", "display", "mcp_server", "key", "value", *_META]
+        brief_fields = ["id", "url", "display", "key", "value"]

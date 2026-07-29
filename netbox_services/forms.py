@@ -12,13 +12,15 @@ from utilities.forms.rendering import FieldSet
 from virtualization.models import VirtualMachine
 from .choices import (
     DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
-    IntegrationParamValueTypeChoices, ProviderScopeChoices, ServiceInstanceStatusChoices,
+    IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
+    ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
-    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
-    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
+    ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     RotationPolicy, ServiceInstanceExtension,
 )
 
@@ -322,6 +324,64 @@ class HostRoleAssignmentVarForm(NetBoxModelForm):
         fields = ["assignment", "param", "value", "tags"]
 
 
+class CatalogMcpServerForm(NetBoxModelForm):
+    catalog = DynamicModelChoiceField(queryset=ServiceCatalog.objects.all())
+    fieldsets = (
+        FieldSet("catalog", "name", "description", "upstream_url", name="Companion"),
+        FieldSet("source_type", "source", "default_version", name="Source"),
+        FieldSet("transport", "default_port", "capability", name="Transport & trust"),
+    )
+
+    class Meta:
+        model = CatalogMcpServer
+        fields = [
+            "catalog", "name", "source_type", "source", "default_version", "transport",
+            "default_port", "capability", "upstream_url", "description", "tags",
+        ]
+
+
+class CatalogMcpServerParamForm(NetBoxModelForm):
+    catalog_mcp = DynamicModelChoiceField(queryset=CatalogMcpServer.objects.all())
+    fieldsets = (
+        FieldSet("catalog_mcp", "key", "value_type", name="Param"),
+        FieldSet("required", "default", "secret", "description", name="Contract"),
+    )
+
+    class Meta:
+        model = CatalogMcpServerParam
+        fields = [
+            "catalog_mcp", "key", "value_type", "required", "default", "secret", "description", "tags",
+        ]
+
+
+class McpServerForm(NetBoxModelForm):
+    service_instance = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
+    catalog_mcp = DynamicModelChoiceField(queryset=CatalogMcpServer.objects.all())
+    listeners = DynamicModelMultipleChoiceField(queryset=Service.objects.all(), required=False)
+    fieldsets = (
+        FieldSet("service_instance", "catalog_mcp", "version", "status", name="Companion"),
+        FieldSet("transport", "bind_address", "listeners", name="Listener"),
+        FieldSet("token_key", "auth_token_key", name="Credential references (OpenBao keys)"),
+        FieldSet("autostart", "managed", name="Lifecycle"),
+    )
+
+    class Meta:
+        model = McpServer
+        fields = [
+            "service_instance", "catalog_mcp", "version", "transport", "status", "bind_address",
+            "listeners", "token_key", "auth_token_key", "autostart", "managed", "tags",
+        ]
+
+
+class McpServerParamForm(NetBoxModelForm):
+    mcp_server = DynamicModelChoiceField(queryset=McpServer.objects.all())
+    fieldsets = (FieldSet("mcp_server", "key", "value", name="Override value"),)
+
+    class Meta:
+        model = McpServerParam
+        fields = ["mcp_server", "key", "value", "tags"]
+
+
 # --------------------------------------------------------------------------- filter forms
 
 
@@ -487,3 +547,47 @@ class HostRoleAssignmentVarFilterForm(NetBoxModelFilterSetForm):
     assignment_id = DynamicModelMultipleChoiceField(queryset=HostRoleAssignment.objects.all(), required=False, label="Assignment")
     param_id = DynamicModelMultipleChoiceField(queryset=HostRoleParam.objects.all(), required=False, label="Param")
     tag = TagFilterField(HostRoleAssignmentVar)
+
+
+class CatalogMcpServerFilterForm(NetBoxModelFilterSetForm):
+    model = CatalogMcpServer
+    catalog_id = DynamicModelMultipleChoiceField(queryset=ServiceCatalog.objects.all(), required=False, label="Catalog")
+    transport = forms.MultipleChoiceField(choices=McpTransportChoices, required=False)
+    capability = forms.MultipleChoiceField(choices=McpCapabilityChoices, required=False)
+    source_type = forms.MultipleChoiceField(choices=McpSourceTypeChoices, required=False)
+    tag = TagFilterField(CatalogMcpServer)
+
+
+class CatalogMcpServerParamFilterForm(NetBoxModelFilterSetForm):
+    model = CatalogMcpServerParam
+    catalog_mcp_id = DynamicModelMultipleChoiceField(
+        queryset=CatalogMcpServer.objects.all(), required=False, label="Catalog MCP Server"
+    )
+    value_type = forms.MultipleChoiceField(choices=IntegrationParamValueTypeChoices, required=False)
+    required = forms.NullBooleanField(required=False)
+    secret = forms.NullBooleanField(required=False)
+    tag = TagFilterField(CatalogMcpServerParam)
+
+
+class McpServerFilterForm(NetBoxModelFilterSetForm):
+    model = McpServer
+    service_instance_id = DynamicModelMultipleChoiceField(
+        queryset=ServiceInstance.objects.all(), required=False, label="Service Instance"
+    )
+    catalog_mcp_id = DynamicModelMultipleChoiceField(
+        queryset=CatalogMcpServer.objects.all(), required=False, label="Catalog MCP Server"
+    )
+    status = forms.MultipleChoiceField(choices=ServiceInstanceStatusChoices, required=False)
+    transport = forms.MultipleChoiceField(choices=McpTransportChoices, required=False)
+    capability = forms.MultipleChoiceField(choices=McpCapabilityChoices, required=False)
+    autostart = forms.NullBooleanField(required=False)
+    managed = forms.NullBooleanField(required=False)
+    tag = TagFilterField(McpServer)
+
+
+class McpServerParamFilterForm(NetBoxModelFilterSetForm):
+    model = McpServerParam
+    mcp_server_id = DynamicModelMultipleChoiceField(
+        queryset=McpServer.objects.all(), required=False, label="MCP Server"
+    )
+    tag = TagFilterField(McpServerParam)

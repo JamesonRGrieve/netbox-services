@@ -157,6 +157,43 @@ live in NetBox — they resolve at apply via the same OpenBao read the tokens us
 catalog)`. Same-type peer edges (WP→WP, MariaDB→MariaDB) have **no** IntegrationCatalog
 entry, so they live here rather than overloading `Integration.type`.
 
+### MCP companions  *(bolt-on layer — `CatalogMcpServer` / `McpServer` + their param pair)*
+
+**Why it exists.** Services increasingly ship an agent-facing **MCP companion** — a separate
+daemon fronting the service so an AI agent calls typed tools instead of hand-writing throwaway
+scripts. NetBox has [`netboxlabs/netbox-mcp-server`](https://github.com/netboxlabs/netbox-mcp-server),
+Semaphore has `cloin/semaphore-mcp`, more will follow. Without a model each one is a snowflake
+install: a hand-made systemd unit that is invisible to the SoT, does not survive a guest rebuild,
+and that the next converge knows nothing about. Modeled, a companion is **an instance of a pattern**
+and adding the next one is a row, not code.
+
+**Shape.** Follows the same catalog-declares / instance-overrides split as everything else:
+`CatalogMcpServer` (+ `CatalogMcpServerParam` for typed env knobs) declares what a companion *is*
+for a service **type**; `McpServer` (+ `McpServerParam`) declares that a specific instance runs one.
+Ports are `ipam.Service` rows via `listeners`, identical to `ServiceInstance` — no port column.
+Credentials are `token_key` / `auth_token_key` naming `InstanceOpenBaoPath` keys **on the fronted
+instance**, so a companion reuses the service's existing credential rows instead of duplicating
+them; no new secrets model, and no secret values anywhere near NetBox.
+
+**Not a `CatalogExtension`.** An extension is an in-process add-on installed *into* the app
+(a WordPress plugin, a NetBox plugin): kind/name/version, nothing more. A companion is a separate
+process with its own source, listener, credential, unit lifecycle and trust level. Sharing the
+extension model would mean hiding real divergence behind a `kind` value — the DRY anti-pattern, not
+DRY.
+
+**`capability` is a security boundary, and catalog-owned on purpose.** The harness's Bash-tool deny
+rules (`tofu apply*`, `ansible-playbook*`, `pvesh set:*`, …) bind the **Bash tool only** — they do
+**not** bind MCP tool calls, which are a separate surface. So "may this companion mutate the service
+it fronts?" has to be auditable, queryable declared intent rather than a property of whichever flags
+a unit file happened to start with. It is `read_only` by default (upstream's server *is* read-only),
+lives on the catalog row, and `McpServer.capability` is a read-only property proxying it — there is
+deliberately **no instance-level field**, so an instance cannot quietly widen a read-only companion
+into a mutating one.
+
+**Realization.** A `tofu-services` `mcp_server` resource reads these rows and owns the venv +
+systemd unit + enable/start as atomic declarative state (operator decision: the provider, not a new
+ansible playbook — ansible is being replaced, not extended).
+
 ---
 
 ## 3a. Guest layer — `netbox-guests` (replaces `netbox-proxbox`)

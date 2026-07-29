@@ -105,6 +105,37 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
   trigger metadata + atomic HostRole + consumer M2M fan-out + optional Semaphore schedule ref.
   Secret values never enter NetBox.
 
+**MCP-companion layer** (the bolt-on pattern — an agent-facing MCP server installed *alongside* a
+service, as its own resource):
+- **CatalogMcpServer** (FK catalog): what a companion *is* for a service **type** — `name`,
+  `source_type` + `source` (a *reference*: git/pypi/oci/distro, never vendored content),
+  `default_version`, `transport` (`stdio`|`http`), advisory `default_port`, `upstream_url`, and
+  **`capability`** (`read_only`|`read_write`). Unique `(catalog, name)`.
+- **CatalogMcpServerParam** (FK): the typed schema for companion env/config knobs
+  (`ENABLE_PLUGIN_DISCOVERY`, `LOG_LEVEL`, …) — exact sibling of `IntegrationCatalogParam`, so those
+  knobs never become an untyped blob.
+- **McpServer** (FK service_instance + FK catalog_mcp): THE bolt-on resource — one companion daemon
+  fronting one instance, with `version`/`transport` overrides, `status`, `bind_address`,
+  `listeners` M2M → `ipam.Service` (**ports live in IPAM — no port column**), `autostart`,
+  `managed`, and `token_key`/`auth_token_key` naming `InstanceOpenBaoPath` keys **on the fronted
+  instance** (references, never values — the companion reuses the service's existing credential
+  rows rather than duplicating them). Unique `(service_instance, catalog_mcp)`.
+  `effective_transport`/`effective_version` are computed fallbacks the provider reads so it never
+  re-implements the override logic.
+- **McpServerParam** (FK): per-companion store-on-override values, validated against the declared
+  catalog param via the shared `validate_integration_param_value`.
+
+> **Why not a `CatalogExtension`.** An extension is an in-process add-on installed *into* an app
+> (a WordPress plugin, a NetBox plugin) — kind/name/version and nothing else. A companion is a
+> **separate daemon** with its own source, listener, credential, unit lifecycle and trust level.
+> Genuinely divergent behaviour, so it gets its own thin pair (DRY ≠ forcing unlike things together).
+
+> **`capability` is deliberately catalog-owned and has no instance-level field.** It is a security
+> boundary, not a preference: the harness's Bash-tool deny rules (`tofu apply*`, `pvesh set:*`, …)
+> **do not bind MCP tool calls**, so "can this companion mutate?" must be an auditable, queryable
+> attribute of declared intent — and an instance must not be able to quietly widen a read-only
+> companion into a mutating one. `McpServer.capability` is a read-only property proxying the catalog.
+
 ---
 
 ## Testing (NO MOCKS — real DB, NetBox test framework)
@@ -117,6 +148,12 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
   `makemigrations netbox_services --check --dry-run` on an ephemeral NetBox, and a full test run.
   Re-confirm against the pinned NetBox 4.6: the `ServiceInstance.parent` GFK field names +
   `limit_choices_to` Q serialization, and the `ipam.Service` M2M target.
+- **Offline substitute for the migration check.** Because `makemigrations --check` needs a NetBox
+  env, hand-authored migrations are additionally verified by AST-comparing the migration's per-model
+  field set against `models.py` — it catches the failure mode that actually bites a hand-authored
+  migration (a field present in one place, absent in the other). `0007_mcp_servers` passes at 31
+  fields across 4 models. This is a *supplement*, not a replacement: it cannot catch altered field
+  *kwargs*, so the real `--check` is still owed.
 
 ---
 

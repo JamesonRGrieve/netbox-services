@@ -2,10 +2,11 @@
 import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 from .models import (
-    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
-    HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
-    IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
+    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
+    IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
+    RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 
@@ -289,3 +290,64 @@ class HostRoleAssignmentVarTable(NetBoxTable):
         model = HostRoleAssignmentVar
         fields = ("pk", "id", "assignment", "param", "value", "tags", "created", "last_updated")
         default_columns = ("assignment", "param", "value")
+
+
+class CatalogMcpServerTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    catalog = tables.Column(linkify=True)
+    transport = columns.ChoiceFieldColumn()
+    capability = columns.ChoiceFieldColumn()
+    source_type = columns.ChoiceFieldColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:catalogmcpserver_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = CatalogMcpServer
+        fields = (
+            "pk", "id", "catalog", "name", "source_type", "source", "default_version", "transport",
+            "default_port", "capability", "upstream_url", "description", "tags", "created",
+            "last_updated",
+        )
+        default_columns = ("catalog", "name", "transport", "capability", "default_version")
+
+
+class CatalogMcpServerParamTable(NetBoxTable):
+    key = tables.Column(linkify=True)
+    catalog_mcp = tables.Column(linkify=True)
+    value_type = columns.ChoiceFieldColumn()
+    tags = columns.TagColumn(url_name="plugins:netbox_services:catalogmcpserverparam_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = CatalogMcpServerParam
+        fields = (
+            "pk", "id", "catalog_mcp", "key", "value_type", "required", "default", "secret",
+            "description", "tags", "created", "last_updated",
+        )
+        default_columns = ("catalog_mcp", "key", "value_type", "required", "default")
+
+
+class McpServerTable(NetBoxTable):
+    catalog_mcp = tables.Column(linkify=True)
+    service_instance = tables.Column(linkify=True)
+    status = columns.ChoiceFieldColumn()
+    capability = tables.Column(accessor="catalog_mcp__capability", verbose_name="Capability")
+    tags = columns.TagColumn(url_name="plugins:netbox_services:mcpserver_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = McpServer
+        fields = (
+            "pk", "id", "service_instance", "catalog_mcp", "version", "transport", "capability",
+            "status", "bind_address", "token_key", "auth_token_key", "autostart", "managed", "tags",
+            "created", "last_updated",
+        )
+        default_columns = ("service_instance", "catalog_mcp", "capability", "status", "autostart")
+
+
+class McpServerParamTable(NetBoxTable):
+    key = tables.Column(linkify=True)
+    mcp_server = tables.Column(linkify=True)
+    tags = columns.TagColumn(url_name="plugins:netbox_services:mcpserverparam_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = McpServerParam
+        fields = ("pk", "id", "mcp_server", "key", "value", "tags", "created", "last_updated")
+        default_columns = ("mcp_server", "key", "value")
