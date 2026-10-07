@@ -715,8 +715,9 @@ class ServiceInstanceConfigValue(NetBoxModel):
 
     instance = models.ForeignKey(ServiceInstance, on_delete=models.CASCADE, related_name="config_values")
     param = models.ForeignKey(CatalogConfigParam, on_delete=models.CASCADE, related_name="instance_values")
-    value = models.CharField(
-        max_length=255, help_text="Rendered per value_type (list = newline-delimited; secret = OpenBao path)."
+    value = models.TextField(
+        help_text="Rendered per value_type (list = newline-delimited; secret = OpenBao path). Unbounded, so a "
+        "whole config file (e.g. an adopted site's live vhost) fits exactly."
     )
 
     class Meta:

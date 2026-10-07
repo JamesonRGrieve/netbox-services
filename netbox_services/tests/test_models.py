@@ -410,6 +410,20 @@ class CatalogConfigParamModelTest(TestCase):
         cv.refresh_from_db()
         self.assertEqual(cv.value.split("\n"), ["forgejo.example", "git.example", "localhost"])
 
+    def test_long_multiline_value_round_trips_exactly(self):
+        # Whole config files (an adopted site's live Apache vhost) are stored as one value: no 255 cap,
+        # and the exact bytes — indentation, blank lines, trailing newline — survive the round trip.
+        p_text = CatalogConfigParam.objects.create(
+            catalog=self.forgejo, key="vhost_override", value_type=IntegrationParamValueTypeChoices.STRING,
+        )
+        value = "<VirtualHost *:80>\n" + "".join(f"    Header set X-Line-{i} \"{i}\"\n" for i in range(60)) + "\n</VirtualHost>\n"
+        self.assertGreater(len(value), 1300)
+        cv = ServiceInstanceConfigValue(instance=self.instance, param=p_text, value=value)
+        cv.full_clean()
+        cv.save()
+        cv.refresh_from_db()
+        self.assertEqual(cv.value, value)
+
 
 class ExtensionModelTest(TestCase):
     """CatalogExtension (the known/default extension set) + ServiceInstanceExtension (the per-instance
