@@ -226,6 +226,8 @@ class ServiceInstanceConfigValueSerializer(NetBoxModelSerializer):
         model = ServiceInstanceConfigValue
         fields = ["id", "url", "display", "instance", "param", "value", *_META]
         brief_fields = ["id", "url", "display", "param", "value"]
+        # A value can be a whole config file, stored byte-for-byte (trailing newline included).
+        extra_kwargs = {"value": {"trim_whitespace": False}}
 
 
 class ServiceInstanceExtensionSerializer(NetBoxModelSerializer):

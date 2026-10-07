@@ -303,6 +303,24 @@ class ServiceInstanceConfigValueAPITest(_CRUD):
             {"instance": inst.pk, "param": params[4].pk, "value": "web"},
             {"instance": inst.pk, "param": params[5].pk, "value": "app"},
         ]
+        cls.file_param = CatalogConfigParam.objects.create(
+            catalog=cat, key="vhost_override", value_type=IntegrationParamValueTypeChoices.STRING
+        )
+        cls.inst = inst
+
+    def test_value_whitespace_is_preserved(self):
+        # A value can be a whole config file; the API must store it byte-for-byte. DRF trims by
+        # default, which dropped every file's trailing newline and made each adopted file a diff.
+        self.add_permissions("netbox_services.add_serviceinstanceconfigvalue")
+        value = "  <VirtualHost *:80>\n    ServerName example.test\n</VirtualHost>\n"
+        resp = self.client.post(
+            reverse("plugins-api:netbox_services-api:serviceinstanceconfigvalue-list"),
+            {"instance": self.inst.pk, "param": self.file_param.pk, "value": value},
+            format="json", **self.header,
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["value"], value)
+        self.assertEqual(ServiceInstanceConfigValue.objects.get(pk=resp.data["id"]).value, value)
 
 
 class ServiceInstanceExtensionAPITest(_CRUD):

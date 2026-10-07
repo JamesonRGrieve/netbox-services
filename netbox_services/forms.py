@@ -124,6 +124,8 @@ class CatalogConfigParamForm(NetBoxModelForm):
 class ServiceInstanceConfigValueForm(NetBoxModelForm):
     instance = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
     param = DynamicModelChoiceField(queryset=CatalogConfigParam.objects.all())
+    # Unstripped so a whole config file saved from the UI keeps its exact bytes.
+    value = forms.CharField(widget=forms.Textarea, strip=False)
     fieldsets = (FieldSet("instance", "param", "value", name="Config value"),)
 
     class Meta:
