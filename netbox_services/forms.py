@@ -149,11 +149,12 @@ class ServiceInstanceExtensionForm(NetBoxModelForm):
     instance = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
     fieldsets = (
         FieldSet("instance", "kind", "name", "version", "enabled", "managed", name="Installed extension"),
+        FieldSet("source_url", "branch", name="Source"),
     )
 
     class Meta:
         model = ServiceInstanceExtension
-        fields = ["instance", "kind", "name", "version", "enabled", "managed", "tags"]
+        fields = ["instance", "kind", "name", "version", "source_url", "branch", "enabled", "managed", "tags"]
 
 
 class CatalogTestStateForm(NetBoxModelForm):

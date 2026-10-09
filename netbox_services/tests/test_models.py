@@ -463,6 +463,31 @@ class ExtensionModelTest(TestCase):
         self.assertTrue(ext.enabled)
         self.assertTrue(ext.managed)
 
+    def test_instance_extension_source_defaults_blank(self):
+        ext = ServiceInstanceExtension.objects.create(
+            instance=self.instance, kind=ExtensionKindChoices.PLUGIN, name="classic-editor",
+        )
+        self.assertEqual(ext.source_url, "")
+        self.assertEqual(ext.branch, "")
+
+    def test_instance_extension_source_and_branch_round_trip(self):
+        ext = ServiceInstanceExtension.objects.create(
+            instance=self.instance, kind=ExtensionKindChoices.APP, name="wordpress_import",
+            source_url="https://github.com/JamesonRGrieve/frappe-wordpress-import", branch="main",
+            version="1ce4d33",
+        )
+        ext.refresh_from_db()
+        self.assertEqual(ext.source_url, "https://github.com/JamesonRGrieve/frappe-wordpress-import")
+        self.assertEqual(ext.branch, "main")
+        self.assertEqual(ext.version, "1ce4d33")
+
+    def test_instance_extension_source_must_be_a_url(self):
+        ext = ServiceInstanceExtension(
+            instance=self.instance, kind=ExtensionKindChoices.APP, name="bad-source", source_url="not a url",
+        )
+        with self.assertRaises(ValidationError):
+            ext.full_clean()
+
     def test_instance_extension_arbitrary_no_catalog_required(self):
         # An extension with no matching CatalogExtension is still allowed (any plugin, any instance).
         ext = ServiceInstanceExtension.objects.create(

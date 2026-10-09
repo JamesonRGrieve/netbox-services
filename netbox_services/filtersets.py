@@ -252,10 +252,12 @@ class ServiceInstanceExtensionFilterSet(_InstanceChildFilterMixin):
 
     class Meta:
         model = ServiceInstanceExtension
-        fields = ["id", "kind", "name", "version", "enabled", "managed"]
+        fields = ["id", "kind", "name", "version", "source_url", "branch", "enabled", "managed"]
 
     def search(self, queryset, name, value):
-        return queryset.filter(Q(name__icontains=value) | Q(version__icontains=value))
+        return queryset.filter(
+            Q(name__icontains=value) | Q(version__icontains=value) | Q(source_url__icontains=value)
+        )
 
 
 class HAMirrorFilterSet(NetBoxModelFilterSet):

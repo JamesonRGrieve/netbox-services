@@ -236,7 +236,8 @@ class ServiceInstanceExtensionSerializer(NetBoxModelSerializer):
 
     class Meta:
         model = ServiceInstanceExtension
-        fields = ["id", "url", "display", "instance", "kind", "name", "version", "enabled", "managed", *_META]
+        fields = ["id", "url", "display", "instance", "kind", "name", "version", "source_url", "branch", "enabled",
+                  "managed", *_META]
         brief_fields = ["id", "url", "display", "kind", "name"]
 
 

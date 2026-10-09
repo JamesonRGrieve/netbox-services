@@ -198,8 +198,8 @@ class ServiceInstanceExtensionTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = ServiceInstanceExtension
-        fields = ("pk", "id", "instance", "kind", "name", "version", "enabled", "managed",
-                  "tags", "created", "last_updated")
+        fields = ("pk", "id", "instance", "kind", "name", "version", "source_url", "branch", "enabled",
+                  "managed", "tags", "created", "last_updated")
         default_columns = ("instance", "kind", "name", "version", "enabled", "managed")
 
 

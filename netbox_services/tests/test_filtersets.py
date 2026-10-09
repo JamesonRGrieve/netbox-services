@@ -218,9 +218,13 @@ class ServiceInstanceExtensionFilterTest(TestCase):
             instance=cls.instance, kind=ExtensionKindChoices.PLUGIN, name="jetpack",
             enabled=False, managed=False,
         )
+        ServiceInstanceExtension.objects.create(
+            instance=cls.instance, kind=ExtensionKindChoices.APP, name="wordpress_import",
+            source_url="https://github.com/JamesonRGrieve/frappe-wordpress-import", branch="main",
+        )
 
     def test_instance_id(self):
-        self.assertEqual(self.filterset({"instance_id": [self.instance.pk]}, self.queryset).qs.count(), 2)
+        self.assertEqual(self.filterset({"instance_id": [self.instance.pk]}, self.queryset).qs.count(), 3)
 
     def test_kind(self):
         self.assertEqual(
@@ -228,10 +232,20 @@ class ServiceInstanceExtensionFilterTest(TestCase):
         )
 
     def test_enabled(self):
-        self.assertEqual(self.filterset({"enabled": True}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({"enabled": True}, self.queryset).qs.count(), 2)
 
     def test_managed(self):
         self.assertEqual(self.filterset({"managed": False}, self.queryset).qs.count(), 1)
+
+    def test_branch(self):
+        self.assertEqual(self.filterset({"branch": ["main"]}, self.queryset).qs.count(), 1)
+
+    def test_source_url(self):
+        url = "https://github.com/JamesonRGrieve/frappe-wordpress-import"
+        self.assertEqual(self.filterset({"source_url": [url]}, self.queryset).qs.count(), 1)
+
+    def test_search_matches_source_url(self):
+        self.assertEqual(self.filterset({"q": "frappe-wordpress-import"}, self.queryset).qs.count(), 1)
 
     def test_search_name(self):
         self.assertEqual(self.filterset({"q": "jetpack"}, self.queryset).qs.count(), 1)

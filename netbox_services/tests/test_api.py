@@ -339,6 +339,10 @@ class ServiceInstanceExtensionAPITest(_CRUD):
             {"instance": inst.pk, "kind": "plugin", "name": "akismet", "version": "5.3"},
             {"instance": inst.pk, "kind": "plugin", "name": "woocommerce", "enabled": False},
             {"instance": inst.pk, "kind": "theme", "name": "twentytwentyfour", "managed": False},
+            {
+                "instance": inst.pk, "kind": "app", "name": "wordpress_import",
+                "source_url": "https://github.com/JamesonRGrieve/frappe-wordpress-import", "branch": "main",
+            },
         ]
 
 

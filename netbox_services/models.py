@@ -753,6 +753,15 @@ class ServiceInstanceExtension(NetBoxModel):
     kind = models.CharField(max_length=16, choices=ExtensionKindChoices)
     name = models.CharField(max_length=200, help_text="Extension name (e.g. akismet, twentytwentyfour).")
     version = models.CharField(max_length=100, blank=True, help_text="Pinned version (blank = track latest).")
+    source_url = models.URLField(
+        blank=True,
+        help_text="Repository the extension is fetched from, when it is not in the service's default source "
+                  "(e.g. a Frappe app outside github.com/frappe). Blank = the service's default source.",
+    )
+    branch = models.CharField(
+        max_length=100, blank=True,
+        help_text="Branch fetched from the source (blank = the service's default branch).",
+    )
     enabled = models.BooleanField(default=True, help_text="Extension is activated on the instance.")
     managed = models.BooleanField(
         default=True, help_text="The tofu-services provider owns this extension's lifecycle."
