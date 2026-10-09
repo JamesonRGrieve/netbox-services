@@ -218,12 +218,14 @@ class IntegrationTable(NetBoxTable):
 class HAMirrorTable(NetBoxTable):
     mirror = tables.Column(linkify=True)
     primary = tables.Column(linkify=True)
+    active_node = columns.ChoiceFieldColumn()
+    cloudflare_lb = columns.BooleanColumn()
     tags = columns.TagColumn(url_name="plugins:netbox_services:hamirror_list")
 
     class Meta(NetBoxTable.Meta):
         model = HAMirror
-        fields = ("pk", "id", "mirror", "primary", "tags", "created", "last_updated")
-        default_columns = ("mirror", "primary")
+        fields = ("pk", "id", "mirror", "primary", "active_node", "cloudflare_lb", "tags", "created", "last_updated")
+        default_columns = ("mirror", "primary", "active_node", "cloudflare_lb")
 
 
 class HostRoleTable(NetBoxTable):

@@ -409,9 +409,10 @@ class HAMirrorAPITest(_CRUD):
         ])
         cls.create_data = [
             {"mirror": mirrors[3].pk, "primary": primaries[3].pk},
-            {"mirror": mirrors[4].pk, "primary": primaries[4].pk},
-            {"mirror": mirrors[5].pk, "primary": primaries[5].pk},
+            {"mirror": mirrors[4].pk, "primary": primaries[4].pk, "cloudflare_lb": True},
+            {"mirror": mirrors[5].pk, "primary": primaries[5].pk, "active_node": "mirror", "cloudflare_lb": True},
         ]
+        cls.bulk_update_data = {"active_node": "mirror", "cloudflare_lb": True}
 
 
 class HostRoleAPITest(_CRUD):

@@ -268,7 +268,7 @@ class HAMirrorFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = HAMirror
-        fields = ["id"]
+        fields = ["id", "active_node", "cloudflare_lb"]
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(mirror__hostname__icontains=value) | Q(primary__hostname__icontains=value))

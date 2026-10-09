@@ -5,13 +5,14 @@ from dcim.models import Device
 from django import forms
 from ipam.models import Service
 from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
+from utilities.forms import BOOLEAN_WITH_BLANK_CHOICES
 from utilities.forms.fields import (
     DynamicModelChoiceField, DynamicModelMultipleChoiceField, TagFilterField,
 )
 from utilities.forms.rendering import FieldSet
 from virtualization.models import VirtualMachine
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
     ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
@@ -236,11 +237,11 @@ class IntegrationForm(NetBoxModelForm):
 class HAMirrorForm(NetBoxModelForm):
     mirror = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
     primary = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
-    fieldsets = (FieldSet("mirror", "primary", name="HA pairing"),)
+    fieldsets = (FieldSet("mirror", "primary", "active_node", "cloudflare_lb", name="HA pairing"),)
 
     class Meta:
         model = HAMirror
-        fields = ["mirror", "primary", "tags"]
+        fields = ["mirror", "primary", "active_node", "cloudflare_lb", "tags"]
 
 
 class HostRoleForm(NetBoxModelForm):
@@ -510,6 +511,8 @@ class HAMirrorFilterForm(NetBoxModelFilterSetForm):
     model = HAMirror
     mirror_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Mirror")
     primary_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Primary")
+    active_node = forms.MultipleChoiceField(choices=HAActiveNodeChoices, required=False)
+    cloudflare_lb = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES))
     tag = TagFilterField(HAMirror)
 
 

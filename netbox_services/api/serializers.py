@@ -247,7 +247,7 @@ class HAMirrorSerializer(NetBoxModelSerializer):
 
     class Meta:
         model = HAMirror
-        fields = ["id", "url", "display", "mirror", "primary", *_META]
+        fields = ["id", "url", "display", "mirror", "primary", "active_node", "cloudflare_lb", *_META]
         brief_fields = ["id", "url", "display", "mirror", "primary"]
 
 

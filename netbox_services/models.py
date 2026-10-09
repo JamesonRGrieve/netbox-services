@@ -34,7 +34,7 @@ from django.urls import reverse
 from ipam.choices import ServiceProtocolChoices
 from netbox.models import NetBoxModel
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
     ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
 )
@@ -785,6 +785,13 @@ class HAMirror(NetBoxModel):
 
     mirror = models.ForeignKey(ServiceInstance, on_delete=models.CASCADE, related_name="ha_mirror_of")
     primary = models.ForeignKey(ServiceInstance, on_delete=models.CASCADE, related_name="ha_mirrors")
+    active_node = models.CharField(
+        max_length=16, choices=HAActiveNodeChoices, default=HAActiveNodeChoices.PRIMARY,
+        help_text="Which node serves; the other pulls content from it.",
+    )
+    cloudflare_lb = models.BooleanField(
+        default=False, help_text="The pair sits behind the Cloudflare load balancer.",
+    )
 
     class Meta:
         ordering = ["primary", "mirror"]

@@ -2,18 +2,18 @@
 """FilterSet tests against a real DB (no mocks): the explicit FK + choice filters and search."""
 from django.test import TestCase
 from ..choices import (
-    ExtensionKindChoices, HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
-    SecretKindChoices, ServiceInstanceStatusChoices,
+    ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
+    ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
 )
 from ..filtersets import (
-    CatalogConfigParamFilterSet, CatalogExtensionFilterSet, HostRoleAssignmentFilterSet,
+    CatalogConfigParamFilterSet, CatalogExtensionFilterSet, HAMirrorFilterSet, HostRoleAssignmentFilterSet,
     HostRoleAssignmentVarFilterSet, HostRoleFilterSet, HostRoleParamFilterSet, IntegrationCatalogFilterSet,
     IntegrationCatalogParamFilterSet, IntegrationFilterSet, ServiceCatalogFilterSet,
     RotationPolicyFilterSet, ServiceInstanceConfigValueFilterSet, ServiceInstanceExtensionFilterSet,
     ServiceInstanceFilterSet,
 )
 from ..models import (
-    CatalogConfigParam, CatalogExtension, HostRole, HostRoleAssignment, HostRoleAssignmentVar,
+    CatalogConfigParam, CatalogExtension, HAMirror, HostRole, HostRoleAssignment, HostRoleAssignmentVar,
     HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam, RotationPolicy, ServiceCatalog,
     ServiceInstance, ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
@@ -396,3 +396,26 @@ class HostRoleAssignmentVarFilterTest(TestCase):
 
     def test_search_param_key(self):
         self.assertEqual(self.filterset({"q": "max_execution_time"}, self.queryset).qs.count(), 1)
+
+
+class HAMirrorFilterTest(TestCase):
+    queryset = HAMirror.objects.all()
+    filterset = HAMirrorFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        wp = make_catalog("wordpress")
+        pairs = [(make_instance(wp, hostname=f"m{i}"), make_instance(wp, hostname=f"p{i}")) for i in range(3)]
+        HAMirror.objects.create(mirror=pairs[0][0], primary=pairs[0][1])
+        HAMirror.objects.create(mirror=pairs[1][0], primary=pairs[1][1], cloudflare_lb=True)
+        HAMirror.objects.create(
+            mirror=pairs[2][0], primary=pairs[2][1], cloudflare_lb=True, active_node=HAActiveNodeChoices.MIRROR,
+        )
+
+    def test_active_node(self):
+        self.assertEqual(self.filterset({"active_node": [HAActiveNodeChoices.MIRROR]}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({"active_node": [HAActiveNodeChoices.PRIMARY]}, self.queryset).qs.count(), 2)
+
+    def test_cloudflare_lb(self):
+        self.assertEqual(self.filterset({"cloudflare_lb": True}, self.queryset).qs.count(), 2)
+        self.assertEqual(self.filterset({"cloudflare_lb": False}, self.queryset).qs.count(), 1)

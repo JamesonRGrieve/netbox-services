@@ -42,6 +42,14 @@ class HAStrategyChoices(ChoiceSet):
     ]
 
 
+class HAActiveNodeChoices(ChoiceSet):
+    """Which node of an HA pair serves traffic. The other node is the warm standby that pulls
+    content from it; a serving cutover flips this value."""
+    PRIMARY = "primary"
+    MIRROR = "mirror"
+    CHOICES = [(PRIMARY, "Primary", "green"), (MIRROR, "Mirror", "orange")]
+
+
 class DistroChoices(ChoiceSet):
     """Harness test distro the per-(catalog, distro) test state is keyed by."""
     DEBIAN = "debian"

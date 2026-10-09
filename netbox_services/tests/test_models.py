@@ -9,8 +9,8 @@ from django.test import TestCase
 from ipam.models import Service
 from utilities.testing import create_test_device
 from ..choices import (
-    ExtensionKindChoices, HAStrategyChoices, IntegrationParamValueTypeChoices, ProviderScopeChoices,
-    SecretKindChoices, ServiceInstanceStatusChoices,
+    ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
+    ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
 )
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
@@ -505,6 +505,29 @@ class HAMirrorModelTest(TestCase):
         db = make_catalog("mariadb")
         with self.assertRaises(ValidationError):
             HAMirror(mirror=make_instance(wp, hostname="wp"), primary=make_instance(db, hostname="db")).full_clean()
+
+    def test_serving_roles_default_to_primary_without_cloudflare(self):
+        wp = make_catalog("wordpress")
+        edge = HAMirror.objects.create(mirror=make_instance(wp, hostname="m"), primary=make_instance(wp, hostname="p"))
+        edge.refresh_from_db()
+        self.assertEqual(edge.active_node, HAActiveNodeChoices.PRIMARY)
+        self.assertFalse(edge.cloudflare_lb)
+
+    def test_serving_roles_round_trip(self):
+        wp = make_catalog("wordpress")
+        edge = HAMirror.objects.create(
+            mirror=make_instance(wp, hostname="m"), primary=make_instance(wp, hostname="p"),
+            active_node=HAActiveNodeChoices.MIRROR, cloudflare_lb=True,
+        )
+        edge.full_clean()
+        edge.refresh_from_db()
+        self.assertEqual((edge.active_node, edge.cloudflare_lb), (HAActiveNodeChoices.MIRROR, True))
+
+    def test_unknown_active_node_rejected(self):
+        wp = make_catalog("wordpress")
+        edge = HAMirror(mirror=make_instance(wp, hostname="m"), primary=make_instance(wp, hostname="p"), active_node="both")
+        with self.assertRaises(ValidationError):
+            edge.full_clean()
 
 
 class HostRoleModelTest(TestCase):
