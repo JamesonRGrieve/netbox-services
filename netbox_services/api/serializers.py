@@ -158,6 +158,14 @@ class ServiceInstanceSerializer(NetBoxModelSerializer):
     catalog_requires_database = serializers.BooleanField(
         source="catalog.requires_database", read_only=True
     )
+    # The type's build-time size: hv/pve sizes a guest at these while its instance
+    # is staged, and at the guest's own (runtime) size once it is active.
+    catalog_install_memory = serializers.IntegerField(
+        source="catalog.install_memory", read_only=True, allow_null=True
+    )
+    catalog_install_cores = serializers.IntegerField(
+        source="catalog.install_cores", read_only=True, allow_null=True
+    )
     parent_object_type = ContentTypeField(queryset=ContentType.objects.all())
     parent = serializers.SerializerMethodField(read_only=True)
     listeners = SerializedPKRelatedField(
@@ -168,7 +176,7 @@ class ServiceInstanceSerializer(NetBoxModelSerializer):
         model = ServiceInstance
         fields = [
             "id", "url", "display", "catalog", "catalog_playbook", "catalog_default_port",
-            "catalog_requires_database", "parent_object_type", "parent_object_id", "parent",
+            "catalog_requires_database", "catalog_install_memory", "catalog_install_cores", "parent_object_type", "parent_object_id", "parent",
             "hostname", "status", "actual_memory", "actual_cores", "actual_disk", "listeners", *_META,
         ]
         brief_fields = ["id", "url", "display", "catalog", "hostname", "status"]

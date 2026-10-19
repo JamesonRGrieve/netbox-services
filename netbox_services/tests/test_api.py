@@ -258,6 +258,20 @@ class ServiceInstanceAPITest(_CRUD):
         self.assertEqual(response.data["catalog_playbook"], cat.playbook)
         self.assertEqual(response.data["catalog_default_port"], 443)
         self.assertEqual(response.data["catalog_requires_database"], True)
+        self.assertIsNone(response.data["catalog_install_memory"])
+        self.assertIsNone(response.data["catalog_install_cores"])
+
+    def test_catalog_install_size_denormalized(self):
+        """The catalog's build-time size rides on the instance, so hv/pve can size a
+        staged guest for its build in the same single fetch."""
+        self.add_permissions("netbox_services.view_serviceinstance")
+        cat = make_catalog("documenso", install_memory=12288, install_cores=4)
+        inst = make_instance(cat, hostname="esign")
+        url = reverse("plugins-api:netbox_services-api:serviceinstance-detail", kwargs={"pk": inst.pk})
+        response = self.client.get(url, **self.header)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["catalog_install_memory"], 12288)
+        self.assertEqual(response.data["catalog_install_cores"], 4)
 
 
 class InstanceOpenBaoPathAPITest(_CRUD):
