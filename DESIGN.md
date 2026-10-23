@@ -242,7 +242,7 @@ Two-layer SoT, both NetBox-anchored: `netbox-guests` (box → `proxmox` provider
    ansible templates** (the local `internal/ansible.Runner` becomes a Semaphore client).
    The services-apply runs in a **separate Semaphore queue** so a `tofu apply` task that
    blocks on child ansible tasks can't starve the pool. Plan-first / 0-diff per
-   `ai-prompts/tofu.md`; secrets ephemeral from OpenBao.
+   SOP *Stack Standards → OpenTofu*; secrets ephemeral from OpenBao.
 4. **HA reconciler** (decision #11): a separate idempotent Semaphore job reads the
    `HAMirror` edges + `ha_strategy` and materializes the mechanisms (§7). HA is **never**
    modeled as Tofu resources, so the primary↔mirror cycle never has to be acyclic.
@@ -375,7 +375,7 @@ plugin + 0-diff adoption + retire proxbox · flip module reader to native CFs):
   schema, §12.2 `bundles.json`, EOS.4 NetBox⟷ERPNext SoT direction.
 - `prod-lab/docs/netbox-modeling.md` (SoT boundary), `netbox-tofu-bao.md`
   (NetBox→Tofu→OpenBao wiring).
-- `ai-prompts/tofu.md` (provider/module standards, ephemeral secrets, stable-key
+- SOP *Stack Standards → OpenTofu* (provider/module standards, ephemeral secrets, stable-key
   `for_each`).
 - In-house plugin reference: `netbox-system-services` (layout to mirror).
 - Seeder reference: `prod-lab/scripts/seed_lab_features.py`.
