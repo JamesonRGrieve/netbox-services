@@ -200,7 +200,7 @@ class InstanceOpenBaoPathSerializer(NetBoxModelSerializer):
 
     class Meta:
         model = InstanceOpenBaoPath
-        fields = ["id", "url", "display", "instance", "key", "path", *_META]
+        fields = ["id", "url", "display", "instance", "key", "path", "field", *_META]
         brief_fields = ["id", "url", "display", "key"]
 
 

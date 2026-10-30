@@ -173,8 +173,8 @@ class InstanceOpenBaoPathTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = InstanceOpenBaoPath
-        fields = ("pk", "id", "instance", "key", "path", "tags", "created", "last_updated")
-        default_columns = ("instance", "key", "path")
+        fields = ("pk", "id", "instance", "key", "path", "field", "tags", "created", "last_updated")
+        default_columns = ("instance", "key", "path", "field")
 
 
 class ServiceInstanceConfigValueTable(NetBoxTable):

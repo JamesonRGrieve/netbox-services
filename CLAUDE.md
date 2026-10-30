@@ -86,7 +86,9 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
 - **ServiceInstance**: FK catalog; `parent` GFK → `virtualization.virtualmachine | dcim.device`
   (limited via `parent_object_type.limit_choices_to`); `hostname`; `status`; actual resources;
   `listeners` M2M → `ipam.Service` (ports live in IPAM — no port column here).
-- **InstanceOpenBaoPath** (FK): `key`, `path` (credential/token references → OpenBao).
+- **InstanceOpenBaoPath** (FK): `key`, `path` (credential/token references → OpenBao), optional `field`
+  (the key inside that secret when it differs from `key`, so a pointer can follow the OpenBao grammar's
+  purpose leaves, e.g. `admin_password` → `…/svc/<service>/admin` field `password`; blank = `key`).
 - **Integration** (edge): `consumer`/`provider` FK → ServiceInstance, `type`, `requires_tokens[]`,
   `description`; `unique_together(consumer, type, provider)`; cardinality via
   `validate_integration_cardinality` (clean() + pre_save signal). `consumer_max` is a count check,

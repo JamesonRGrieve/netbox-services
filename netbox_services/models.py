@@ -449,11 +449,18 @@ class ServiceInstance(NetBoxModel):
 class InstanceOpenBaoPath(NetBoxModel):
     """An OpenBao path reference for one of an instance's credentials / published tokens
     (about.json ``credentials``/``provides_tokens`` realized per instance). ``key`` is the logical
-    name; ``path`` is the OpenBao location — never the secret value."""
+    name; ``path`` is the OpenBao location — never the secret value. ``field`` is the key inside
+    that secret when it differs from ``key`` (a grammar leaf such as ``…/svc/<service>/admin`` holds
+    ``password``, while the consumer reads it as ``admin_password``); blank means ``key``."""
 
     instance = models.ForeignKey(ServiceInstance, on_delete=models.CASCADE, related_name="openbao_paths")
     key = models.CharField(max_length=100, help_text="Logical credential/token name.")
     path = models.CharField(max_length=255, help_text="OpenBao path (reference, never the secret).")
+    field = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Key inside the secret at path, when it differs from key (blank = key).",
+    )
 
     class Meta:
         ordering = ["instance", "key"]

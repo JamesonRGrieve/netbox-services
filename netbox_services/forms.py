@@ -218,11 +218,11 @@ class ServiceInstanceForm(NetBoxModelForm):
 
 class InstanceOpenBaoPathForm(NetBoxModelForm):
     instance = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
-    fieldsets = (FieldSet("instance", "key", "path", name="OpenBao reference"),)
+    fieldsets = (FieldSet("instance", "key", "path", "field", name="OpenBao reference"),)
 
     class Meta:
         model = InstanceOpenBaoPath
-        fields = ["instance", "key", "path", "tags"]
+        fields = ["instance", "key", "path", "field", "tags"]
 
 
 class IntegrationForm(NetBoxModelForm):

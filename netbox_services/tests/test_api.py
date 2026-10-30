@@ -286,10 +286,21 @@ class InstanceOpenBaoPathAPITest(_CRUD):
             InstanceOpenBaoPath(instance=inst, key=f"k{i}", path=f"secret/data/k{i}") for i in range(3)
         ])
         cls.create_data = [
-            {"instance": inst.pk, "key": "admin_pass", "path": "secret/data/authentik/admin"},
+            # `field` names the key inside a grammar leaf when it differs from the logical key.
+            {"instance": inst.pk, "key": "admin_pass", "path": "secret/data/authentik/admin", "field": "password"},
             {"instance": inst.pk, "key": "db_pass", "path": "secret/data/authentik/db"},
-            {"instance": inst.pk, "key": "api_token", "path": "secret/data/authentik/api"},
+            {"instance": inst.pk, "key": "api_token", "path": "secret/data/authentik/api", "field": "token"},
         ]
+
+    def test_field_defaults_blank_and_round_trips(self):
+        self.add_permissions("netbox_services.view_instanceopenbaopath")
+        blank = InstanceOpenBaoPath.objects.get(key="k0")
+        self.assertEqual(blank.field, "")
+        blank.field = "password"
+        blank.full_clean()
+        blank.save()
+        url = reverse("plugins-api:netbox_services-api:instanceopenbaopath-detail", kwargs={"pk": blank.pk})
+        self.assertEqual(self.client.get(url, **self.header).data["field"], "password")
 
 
 class ServiceInstanceConfigValueAPITest(_CRUD):

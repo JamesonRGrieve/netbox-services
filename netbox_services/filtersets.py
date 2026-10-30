@@ -199,7 +199,7 @@ class ServiceInstanceFilterSet(NetBoxModelFilterSet):
 class InstanceOpenBaoPathFilterSet(_InstanceChildFilterMixin):
     class Meta:
         model = InstanceOpenBaoPath
-        fields = ["id", "key", "path"]
+        fields = ["id", "key", "path", "field"]
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(key__icontains=value) | Q(path__icontains=value))
