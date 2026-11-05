@@ -769,6 +769,16 @@ class ServiceInstanceExtension(NetBoxModel):
         max_length=100, blank=True,
         help_text="Branch fetched from the source (blank = the service's default branch).",
     )
+    module = models.CharField(
+        max_length=100, blank=True,
+        help_text="Import/app name when it differs from name (e.g. a NetBox plugin's Django app label). "
+                  "Blank = name.",
+    )
+    position = models.PositiveSmallIntegerField(
+        blank=True, null=True,
+        help_text="Load order among this instance's extensions of the same kind (e.g. NetBox PLUGINS order). "
+                  "Blank = unordered.",
+    )
     enabled = models.BooleanField(default=True, help_text="Extension is activated on the instance.")
     managed = models.BooleanField(
         default=True, help_text="The tofu-services provider owns this extension's lifecycle."

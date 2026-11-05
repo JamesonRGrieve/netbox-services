@@ -252,7 +252,7 @@ class ServiceInstanceExtensionFilterSet(_InstanceChildFilterMixin):
 
     class Meta:
         model = ServiceInstanceExtension
-        fields = ["id", "kind", "name", "version", "source_url", "branch", "enabled", "managed"]
+        fields = ["id", "kind", "name", "version", "source_url", "branch", "module", "position", "enabled", "managed"]
 
     def search(self, queryset, name, value):
         return queryset.filter(

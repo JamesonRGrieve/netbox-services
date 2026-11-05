@@ -222,9 +222,19 @@ class ServiceInstanceExtensionFilterTest(TestCase):
             instance=cls.instance, kind=ExtensionKindChoices.APP, name="wordpress_import",
             source_url="https://github.com/JamesonRGrieve/frappe-wordpress-import", branch="main",
         )
+        ServiceInstanceExtension.objects.create(
+            instance=cls.instance, kind=ExtensionKindChoices.MODULE, name="netbox-plugin-dns",
+            version="1.5.8", module="netbox_dns", position=10,
+        )
 
     def test_instance_id(self):
-        self.assertEqual(self.filterset({"instance_id": [self.instance.pk]}, self.queryset).qs.count(), 3)
+        self.assertEqual(self.filterset({"instance_id": [self.instance.pk]}, self.queryset).qs.count(), 4)
+
+    def test_module(self):
+        self.assertEqual(self.filterset({"module": ["netbox_dns"]}, self.queryset).qs.count(), 1)
+
+    def test_position(self):
+        self.assertEqual(self.filterset({"position": [10]}, self.queryset).qs.count(), 1)
 
     def test_kind(self):
         self.assertEqual(
@@ -232,7 +242,7 @@ class ServiceInstanceExtensionFilterTest(TestCase):
         )
 
     def test_enabled(self):
-        self.assertEqual(self.filterset({"enabled": True}, self.queryset).qs.count(), 2)
+        self.assertEqual(self.filterset({"enabled": True}, self.queryset).qs.count(), 3)
 
     def test_managed(self):
         self.assertEqual(self.filterset({"managed": False}, self.queryset).qs.count(), 1)

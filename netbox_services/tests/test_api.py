@@ -368,6 +368,10 @@ class ServiceInstanceExtensionAPITest(_CRUD):
                 "instance": inst.pk, "kind": "app", "name": "wordpress_import",
                 "source_url": "https://github.com/JamesonRGrieve/frappe-wordpress-import", "branch": "main",
             },
+            {
+                "instance": inst.pk, "kind": "plugin", "name": "netbox-plugin-dns", "version": "1.5.8",
+                "module": "netbox_dns", "position": 10,
+            },
         ]
 
 
