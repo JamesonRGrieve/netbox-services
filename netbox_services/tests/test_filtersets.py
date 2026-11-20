@@ -17,7 +17,7 @@ from ..models import (
     HostRoleParam, InstanceOpenBaoPath, Integration, IntegrationCatalog, IntegrationCatalogParam, RotationPolicy, ServiceCatalog,
     ServiceInstance, ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
-from .utils import make_assignment, make_catalog, make_instance, make_role
+from .utils import make_assignment, make_catalog, make_instance, make_role, make_vm
 
 
 class ServiceCatalogFilterTest(TestCase):
@@ -389,8 +389,8 @@ class HostRoleAssignmentFilterTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.role = make_role("wire_aide")
-        make_assignment(cls.role, enabled=True)
-        make_assignment(cls.role, enabled=False)
+        make_assignment(cls.role, target=make_vm("vm-wire-aide-1"), enabled=True)
+        make_assignment(cls.role, target=make_vm("vm-wire-aide-2"), enabled=False)
 
     def test_role_id(self):
         self.assertEqual(self.filterset({"role_id": [self.role.pk]}, self.queryset).qs.count(), 2)

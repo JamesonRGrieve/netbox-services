@@ -453,6 +453,8 @@ class ExtensionModelTest(TestCase):
             )
         # Same name under a different kind is allowed (kind is part of the key).
         CatalogExtension.objects.create(catalog=self.wp, kind=ExtensionKindChoices.THEME, name="akismet")
+        # ServiceInstance.catalog is PROTECT, so the catalog's instance goes first.
+        self.instance.delete()
         self.wp.delete()
         self.assertEqual(CatalogExtension.objects.count(), 0)
 
@@ -587,7 +589,7 @@ class HostRoleAssignmentModelTest(TestCase):
         self.assertEqual(a.order, 0)
         self.assertTrue(a.enabled)
         self.assertIn("/plugins/services/host-role-assignments/", a.get_absolute_url())
-        self.assertIn(role.name, str(a))
+        self.assertEqual(str(a), f"{vm} → {role}")
 
     def test_device_target(self):
         role = make_role("wire_rkhunter")

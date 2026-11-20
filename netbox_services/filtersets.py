@@ -6,7 +6,7 @@ import django_filters
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAStrategyChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
     ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
@@ -271,6 +271,7 @@ class HAMirrorFilterSet(NetBoxModelFilterSet):
     primary_id = django_filters.ModelMultipleChoiceFilter(
         field_name="primary", queryset=ServiceInstance.objects.all(), label="Primary (ID)"
     )
+    active_node = django_filters.MultipleChoiceFilter(choices=HAActiveNodeChoices)
 
     class Meta:
         model = HAMirror
