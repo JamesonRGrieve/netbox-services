@@ -169,12 +169,15 @@ class ServiceInstanceTable(NetBoxTable):
 class InstanceOpenBaoPathTable(NetBoxTable):
     instance = tables.Column(linkify=True)
     key = tables.Column(linkify=True)
+    vault = tables.Column(linkify=True)
+    effective_vault = tables.Column(linkify=True, orderable=False, accessor="effective_vault")
     tags = columns.TagColumn(url_name="plugins:netbox_services:instanceopenbaopath_list")
 
     class Meta(NetBoxTable.Meta):
         model = InstanceOpenBaoPath
-        fields = ("pk", "id", "instance", "key", "path", "field", "tags", "created", "last_updated")
-        default_columns = ("instance", "key", "path", "field")
+        fields = ("pk", "id", "instance", "key", "path", "field", "vault", "effective_vault", "tags", "created",
+                  "last_updated")
+        default_columns = ("instance", "key", "path", "field", "effective_vault")
 
 
 class ServiceInstanceConfigValueTable(NetBoxTable):

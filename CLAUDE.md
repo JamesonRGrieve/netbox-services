@@ -89,6 +89,11 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
 - **InstanceOpenBaoPath** (FK): `key`, `path` (credential/token references → OpenBao), optional `field`
   (the key inside that secret when it differs from `key`, so a pointer can follow the OpenBao grammar's
   purpose leaves, e.g. `admin_password` → `…/svc/<service>/admin` field `password`; blank = `key`).
+  Optional `vault` FK → an `openbao`-catalog ServiceInstance (PROTECT), set only for a cross-OU read;
+  the read-only `effective_vault` (API, table) is `vault`, else the single **active** openbao instance
+  whose host has the same tenant as the pointer's host, else the active one on an untenanted host
+  (the operator's vault); None when ambiguous. A client vault takes over its tenant's pointers when
+  its instance goes active (card 407).
 - **Integration** (edge): `consumer`/`provider` FK → ServiceInstance, `type`, `requires_tokens[]`,
   `description`; `unique_together(consumer, type, provider)`; cardinality via
   `validate_integration_cardinality` (clean() + pre_save signal). `consumer_max` is a count check,

@@ -197,6 +197,10 @@ class ServiceInstanceFilterSet(NetBoxModelFilterSet):
 
 
 class InstanceOpenBaoPathFilterSet(_InstanceChildFilterMixin):
+    vault_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="vault", queryset=ServiceInstance.objects.all(), label="Vault (ID)"
+    )
+
     class Meta:
         model = InstanceOpenBaoPath
         fields = ["id", "key", "path", "field"]

@@ -39,6 +39,9 @@ from .choices import (
     ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
 )
 
+# The catalog name of an OpenBao vault instance (InstanceOpenBaoPath.vault / effective_vault).
+OPENBAO_CATALOG = "openbao"
+
 # Content types a ServiceInstance may be installed onto (a guest VM or a raw-OS device).
 PARENT_CT_LIMIT = models.Q(app_label="dcim", model="device") | models.Q(
     app_label="virtualization", model="virtualmachine"
@@ -461,6 +464,12 @@ class InstanceOpenBaoPath(NetBoxModel):
         blank=True,
         help_text="Key inside the secret at path, when it differs from key (blank = key).",
     )
+    vault = models.ForeignKey(
+        ServiceInstance, on_delete=models.PROTECT, null=True, blank=True, related_name="vault_paths",
+        limit_choices_to={"catalog__name": OPENBAO_CATALOG},
+        help_text="The OpenBao instance holding path, when it is not the owner's own vault "
+                  "(a cross-OU read). Blank = effective_vault's tenant rule.",
+    )
 
     class Meta:
         ordering = ["instance", "key"]
@@ -476,6 +485,35 @@ class InstanceOpenBaoPath(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_services:instanceopenbaopath", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        if self.vault_id and self.vault.catalog.name != OPENBAO_CATALOG:
+            raise ValidationError({"vault": f"{self.vault} is not an {OPENBAO_CATALOG} instance."})
+
+    @property
+    def effective_vault(self):
+        """The vault that holds ``path``: ``vault`` when set, else the active openbao instance whose
+        host has the same tenant as this instance's host, else the active one on an untenanted host
+        (the operator's own vault). None when the rule finds no single vault. A client vault takes
+        over its tenant's pointers when its instance goes active (the cutover switch)."""
+        return self.vault or tenant_vault(host_tenant_id(self.instance.parent))
+
+
+def host_tenant_id(host):
+    return getattr(host, "tenant_id", None)
+
+
+def tenant_vault(tenant_id):
+    """The single active openbao instance for ``tenant_id`` (falling back to the untenanted one)."""
+    vaults = [v for v in ServiceInstance.objects.filter(
+        catalog__name=OPENBAO_CATALOG, status=ServiceInstanceStatusChoices.ACTIVE
+    ).prefetch_related("parent")]
+    for tid in dict.fromkeys((tenant_id, None)):
+        matches = [v for v in vaults if host_tenant_id(v.parent) == tid]
+        if matches:
+            return matches[0] if len(matches) == 1 else None
+    return None
 
 
 def validate_integration_cardinality(integration):

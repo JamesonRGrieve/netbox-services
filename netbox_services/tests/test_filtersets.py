@@ -7,14 +7,14 @@ from ..choices import (
 )
 from ..filtersets import (
     CatalogConfigParamFilterSet, CatalogExtensionFilterSet, HAMirrorFilterSet, HostRoleAssignmentFilterSet,
-    HostRoleAssignmentVarFilterSet, HostRoleFilterSet, HostRoleParamFilterSet, IntegrationCatalogFilterSet,
+    HostRoleAssignmentVarFilterSet, HostRoleFilterSet, InstanceOpenBaoPathFilterSet, HostRoleParamFilterSet, IntegrationCatalogFilterSet,
     IntegrationCatalogParamFilterSet, IntegrationFilterSet, ServiceCatalogFilterSet,
     RotationPolicyFilterSet, ServiceInstanceConfigValueFilterSet, ServiceInstanceExtensionFilterSet,
     ServiceInstanceFilterSet,
 )
 from ..models import (
     CatalogConfigParam, CatalogExtension, HAMirror, HostRole, HostRoleAssignment, HostRoleAssignmentVar,
-    HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam, RotationPolicy, ServiceCatalog,
+    HostRoleParam, InstanceOpenBaoPath, Integration, IntegrationCatalog, IntegrationCatalogParam, RotationPolicy, ServiceCatalog,
     ServiceInstance, ServiceInstanceConfigValue, ServiceInstanceExtension,
 )
 from .utils import make_assignment, make_catalog, make_instance, make_role
@@ -443,3 +443,18 @@ class HAMirrorFilterTest(TestCase):
     def test_cloudflare_lb(self):
         self.assertEqual(self.filterset({"cloudflare_lb": True}, self.queryset).qs.count(), 2)
         self.assertEqual(self.filterset({"cloudflare_lb": False}, self.queryset).qs.count(), 1)
+
+
+class InstanceOpenBaoPathFilterTest(TestCase):
+    queryset = InstanceOpenBaoPath.objects.all()
+    filterset = InstanceOpenBaoPathFilterSet
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.vault = make_instance(make_catalog("openbao"), hostname="boden-openbao")
+        inst = make_instance(make_catalog("authentik"), hostname="prod-authentik")
+        InstanceOpenBaoPath.objects.create(instance=inst, key="boden_oauth", path="prod/boden/x", vault=cls.vault)
+        InstanceOpenBaoPath.objects.create(instance=inst, key="db", path="prod/zephyrex/x")
+
+    def test_vault_id(self):
+        self.assertEqual(self.filterset({"vault_id": [self.vault.pk]}, self.queryset).qs.get().key, "boden_oauth")

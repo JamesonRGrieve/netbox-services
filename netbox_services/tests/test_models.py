@@ -4,9 +4,11 @@ listeners, and — the load-bearing logic — Integration cardinality (clean() +
 and the HAMirror same-type / no-self-mirror rules."""
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import ProtectedError as models_ProtectedError
 from django.db.utils import IntegrityError
 from django.test import TestCase
 from ipam.models import Service
+from tenancy.models import Tenant
 from utilities.testing import create_test_device
 from ..choices import (
     ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
@@ -15,7 +17,7 @@ from ..choices import (
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
     CatalogToken, HAMirror, HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration,
-    IntegrationCatalog, IntegrationCatalogParam, IntegrationParam, RotationPolicy, ServiceInstanceConfigValue,
+    IntegrationCatalog, IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
 )
 from .utils import make_assignment, make_catalog, make_instance, make_role, make_vm
@@ -646,3 +648,72 @@ class HostRoleAssignmentVarModelTest(TestCase):
         foreign = HostRoleParam.objects.create(role=other, key="scan_hour", value_type=IntegrationParamValueTypeChoices.INT)
         with self.assertRaises(ValidationError):
             HostRoleAssignmentVar(assignment=self.assignment, param=foreign, value="3").full_clean()
+
+
+class InstanceOpenBaoPathVaultTest(TestCase):
+    """effective_vault: explicit vault, else the active vault of the host's tenant, else the active vault
+    on an untenanted host; None when the rule finds no single vault. Only active vaults count."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.omg, cls.boden, cls.capstone = (Tenant.objects.create(name=n, slug=n) for n in ("omg", "boden", "capstone"))
+        cls.ob = make_catalog("openbao")
+        cls.app = make_catalog("wordpress")
+        cls.home = make_instance(cls.ob, make_vm("prod-openbao"), hostname="prod-openbao",
+                                 status=ServiceInstanceStatusChoices.ACTIVE)
+
+    def vm(self, name, tenant=None):
+        v = make_vm(name)
+        v.tenant = tenant
+        v.save()
+        return v
+
+    def pointer(self, host, **kwargs):
+        inst = make_instance(self.app, host, hostname=host.name)
+        return InstanceOpenBaoPath.objects.create(instance=inst, key="db", path="prod/x/db", **kwargs)
+
+    def test_untenanted_host_uses_the_untenanted_vault(self):
+        self.assertEqual(self.pointer(self.vm("prod-wiki")).effective_vault, self.home)
+
+    def test_tenant_without_a_vault_falls_back(self):
+        self.assertEqual(self.pointer(self.vm("dev-erp", self.capstone)).effective_vault, self.home)
+
+    def test_tenant_vault_takes_over_only_when_active(self):
+        p = self.pointer(self.vm("prod-wp-livex", self.omg))
+        client = make_instance(self.ob, self.vm("omg-openbao", self.omg), hostname="omg-openbao")
+        self.assertEqual(p.effective_vault, self.home)
+        client.status = ServiceInstanceStatusChoices.ACTIVE
+        client.save()
+        self.assertEqual(p.effective_vault, client)
+        self.assertEqual(self.pointer(self.vm("prod-wiki")).effective_vault, self.home)
+
+    def test_explicit_vault_wins(self):
+        boden = make_instance(self.ob, self.vm("boden-openbao", self.boden), hostname="boden-openbao",
+                              status=ServiceInstanceStatusChoices.ACTIVE)
+        p = self.pointer(self.vm("prod-authentik"), vault=boden)
+        self.assertEqual(p.effective_vault, boden)
+        self.assertEqual(list(boden.vault_paths.all()), [p])
+
+    def test_two_active_vaults_for_one_tenant_resolve_to_none(self):
+        for n in ("omg-openbao-a", "omg-openbao-b"):
+            make_instance(self.ob, self.vm(n, self.omg), hostname=n, status=ServiceInstanceStatusChoices.ACTIVE)
+        self.assertIsNone(self.pointer(self.vm("prod-wp-x", self.omg)).effective_vault)
+
+    def test_device_host_uses_its_tenant(self):
+        dev = create_test_device("omg-router")
+        dev.tenant = self.omg
+        dev.save()
+        client = make_instance(self.ob, self.vm("omg-openbao", self.omg), hostname="omg-openbao",
+                               status=ServiceInstanceStatusChoices.ACTIVE)
+        self.assertEqual(self.pointer(dev).effective_vault, client)
+
+    def test_vault_must_be_an_openbao_instance(self):
+        p = InstanceOpenBaoPath(instance=make_instance(self.app, self.vm("a"), hostname="a"), key="k", path="p",
+                                vault=make_instance(self.app, self.vm("b"), hostname="b"))
+        with self.assertRaises(ValidationError):
+            p.full_clean()
+
+    def test_vault_in_use_is_protected(self):
+        self.pointer(self.vm("prod-authentik"), vault=self.home)
+        with self.assertRaises(models_ProtectedError):
+            self.home.delete()

@@ -302,6 +302,21 @@ class InstanceOpenBaoPathAPITest(_CRUD):
         url = reverse("plugins-api:netbox_services-api:instanceopenbaopath-detail", kwargs={"pk": blank.pk})
         self.assertEqual(self.client.get(url, **self.header).data["field"], "password")
 
+    def test_vault_and_effective_vault_round_trip(self):
+        self.add_permissions("netbox_services.view_instanceopenbaopath", "netbox_services.change_instanceopenbaopath")
+        home = make_instance(make_catalog("openbao"), hostname="prod-openbao", status="active")
+        p = InstanceOpenBaoPath.objects.get(key="k1")
+        url = reverse("plugins-api:netbox_services-api:instanceopenbaopath-detail", kwargs={"pk": p.pk})
+        data = self.client.get(url, **self.header).data
+        self.assertIsNone(data["vault"])
+        self.assertEqual(data["effective_vault"]["id"], home.pk)
+        other = make_instance(make_catalog("openbao-other-catalog"), hostname="not-a-vault")
+        r = self.client.patch(url, {"vault": other.pk}, format="json", **self.header)
+        self.assertEqual(r.status_code, 400)
+        r = self.client.patch(url, {"vault": home.pk}, format="json", **self.header)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data["vault"]["id"], home.pk)
+
 
 class ServiceInstanceConfigValueAPITest(_CRUD):
     model = ServiceInstanceConfigValue

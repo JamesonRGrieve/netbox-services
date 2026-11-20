@@ -197,11 +197,18 @@ class ServiceInstanceSerializer(NetBoxModelSerializer):
 class InstanceOpenBaoPathSerializer(NetBoxModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:instanceopenbaopath-detail")
     instance = ServiceInstanceSerializer(nested=True)
+    vault = ServiceInstanceSerializer(nested=True, required=False, allow_null=True)
+    effective_vault = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = InstanceOpenBaoPath
-        fields = ["id", "url", "display", "instance", "key", "path", "field", *_META]
+        fields = ["id", "url", "display", "instance", "key", "path", "field", "vault", "effective_vault", *_META]
         brief_fields = ["id", "url", "display", "key"]
+
+    @extend_schema_field(ServiceInstanceSerializer(nested=True, allow_null=True))
+    def get_effective_vault(self, obj):
+        vault = obj.effective_vault
+        return ServiceInstanceSerializer(vault, nested=True, context=self.context).data if vault else None
 
 
 class IntegrationSerializer(NetBoxModelSerializer):

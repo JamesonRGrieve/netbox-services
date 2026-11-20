@@ -17,6 +17,7 @@ from .choices import (
     ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
+    OPENBAO_CATALOG,
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
     CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
     HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
@@ -220,11 +221,15 @@ class ServiceInstanceForm(NetBoxModelForm):
 
 class InstanceOpenBaoPathForm(NetBoxModelForm):
     instance = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
-    fieldsets = (FieldSet("instance", "key", "path", "field", name="OpenBao reference"),)
+    vault = DynamicModelChoiceField(
+        queryset=ServiceInstance.objects.filter(catalog__name=OPENBAO_CATALOG), required=False,
+        query_params={"catalog": OPENBAO_CATALOG},
+    )
+    fieldsets = (FieldSet("instance", "key", "path", "field", "vault", name="OpenBao reference"),)
 
     class Meta:
         model = InstanceOpenBaoPath
-        fields = ["instance", "key", "path", "field", "tags"]
+        fields = ["instance", "key", "path", "field", "vault", "tags"]
 
 
 class IntegrationForm(NetBoxModelForm):
@@ -500,6 +505,10 @@ class ServiceInstanceFilterForm(NetBoxModelFilterSetForm):
 class InstanceOpenBaoPathFilterForm(NetBoxModelFilterSetForm):
     model = InstanceOpenBaoPath
     instance_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Instance")
+    vault_id = DynamicModelMultipleChoiceField(
+        queryset=ServiceInstance.objects.filter(catalog__name=OPENBAO_CATALOG), required=False, label="Vault",
+        query_params={"catalog": OPENBAO_CATALOG},
+    )
     tag = TagFilterField(InstanceOpenBaoPath)
 
 
