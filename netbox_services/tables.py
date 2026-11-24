@@ -15,11 +15,12 @@ class ServiceCatalogTable(NetBoxTable):
     name = tables.Column(linkify=True)
     ha_strategy = columns.ChoiceFieldColumn()
     requires_gpu = columns.BooleanColumn()
+    external = columns.BooleanColumn()
     tags = columns.TagColumn(url_name="plugins:netbox_services:servicecatalog_list")
 
     class Meta(NetBoxTable.Meta):
         model = ServiceCatalog
-        fields = ("pk", "id", "name", "display_name", "tier", "default_port", "requires_gpu",
+        fields = ("pk", "id", "name", "display_name", "tier", "default_port", "requires_gpu", "external",
                   "database_type", "ha_strategy", "ingress_haproxy_backup", "tags", "created", "last_updated")
         default_columns = ("name", "display_name", "tier", "default_port", "ha_strategy")
 
@@ -195,6 +196,7 @@ class ServiceInstanceExtensionTable(NetBoxTable):
     instance = tables.Column(linkify=True)
     name = tables.Column(linkify=True)
     kind = columns.ChoiceFieldColumn()
+    install_tier = columns.ChoiceFieldColumn()
     enabled = columns.BooleanColumn()
     managed = columns.BooleanColumn()
     tags = columns.TagColumn(url_name="plugins:netbox_services:serviceinstanceextension_list")
@@ -202,7 +204,7 @@ class ServiceInstanceExtensionTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = ServiceInstanceExtension
         fields = ("pk", "id", "instance", "kind", "name", "version", "source_url", "branch", "module", "position",
-                  "enabled", "managed", "tags", "created", "last_updated")
+                  "install_tier", "enabled", "managed", "tags", "created", "last_updated")
         default_columns = ("instance", "kind", "name", "version", "enabled", "managed")
 
 

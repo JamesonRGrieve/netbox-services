@@ -274,6 +274,50 @@ class ServiceInstanceAPITest(_CRUD):
         self.assertEqual(response.data["catalog_install_cores"], 4)
 
 
+class ExternalServiceInstanceAPITest(_CRUD):
+    """An external catalog's instance (an outside SaaS account) is created over the API with no parent;
+    a hosted catalog's instance without one is refused (ServiceInstance.clean through full_clean)."""
+    model = ServiceInstance
+    brief_fields = ["catalog", "display", "hostname", "id", "status", "url"]
+    bulk_update_data = {"status": "active"}
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.square = make_catalog("square", external=True, default_port=None, playbook="")
+        for i in range(3):
+            ServiceInstance.objects.create(catalog=cls.square, hostname=f"existing-{i}")
+        cls.create_data = [
+            {"catalog": cls.square.pk, "hostname": "handmade-by-hannah-sandbox", "status": "active"},
+            {"catalog": cls.square.pk, "hostname": "handmade-by-hannah-production"},
+            {"catalog": cls.square.pk, "hostname": "another-account", "parent_object_type": None, "parent_object_id": None},
+        ]
+
+    def test_external_flag_denormalized_and_parent_null(self):
+        self.add_permissions("netbox_services.view_serviceinstance")
+        inst = ServiceInstance.objects.get(hostname="existing-0")
+        url = reverse("plugins-api:netbox_services-api:serviceinstance-detail", kwargs={"pk": inst.pk})
+        data = self.client.get(url, **self.header).data
+        self.assertTrue(data["catalog_external"])
+        self.assertIsNone(data["parent"])
+        self.assertIsNone(data["parent_object_type"])
+
+    def test_hosted_instance_without_parent_is_refused(self):
+        self.add_permissions("netbox_services.add_serviceinstance")
+        forgejo = make_catalog("forgejo")
+        url = reverse("plugins-api:netbox_services-api:serviceinstance-list")
+        r = self.client.post(url, {"catalog": forgejo.pk, "hostname": "git"}, format="json", **self.header)
+        self.assertEqual(r.status_code, 400)
+
+    def test_external_instance_with_parent_is_refused(self):
+        self.add_permissions("netbox_services.add_serviceinstance")
+        vm = make_vm("vm-square")
+        url = reverse("plugins-api:netbox_services-api:serviceinstance-list")
+        r = self.client.post(url, {"catalog": self.square.pk, "hostname": "x",
+                                   "parent_object_type": "virtualization.virtualmachine", "parent_object_id": vm.pk},
+                             format="json", **self.header)
+        self.assertEqual(r.status_code, 400)
+
+
 class InstanceOpenBaoPathAPITest(_CRUD):
     model = InstanceOpenBaoPath
     brief_fields = ["display", "id", "key", "url"]
@@ -387,6 +431,7 @@ class ServiceInstanceExtensionAPITest(_CRUD):
                 "instance": inst.pk, "kind": "plugin", "name": "netbox-plugin-dns", "version": "1.5.8",
                 "module": "netbox_dns", "position": 10,
             },
+            {"instance": inst.pk, "kind": "app", "name": "payment_square", "install_tier": "dependent"},
         ]
 
 

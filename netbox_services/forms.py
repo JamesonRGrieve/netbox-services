@@ -12,7 +12,7 @@ from utilities.forms.fields import (
 from utilities.forms.rendering import FieldSet
 from virtualization.models import VirtualMachine
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionInstallTierChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
     ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
@@ -29,7 +29,7 @@ from .models import (
 
 class ServiceCatalogForm(NetBoxModelForm):
     fieldsets = (
-        FieldSet("name", "display_name", "description", "tier", "requires_gpu", name="Identity"),
+        FieldSet("name", "display_name", "description", "tier", "requires_gpu", "external", name="Identity"),
         FieldSet("repo", "docs", "license", name="Provenance"),
         FieldSet("default_port", "install_memory", "install_cores", "runtime_memory", "runtime_cores", "disk", name="Resources"),
         FieldSet("playbook", "init_playbook", "customize_playbook", "unlock_playbook", name="Playbooks"),
@@ -40,7 +40,7 @@ class ServiceCatalogForm(NetBoxModelForm):
     class Meta:
         model = ServiceCatalog
         fields = [
-            "name", "display_name", "description", "repo", "docs", "license", "tier", "requires_gpu",
+            "name", "display_name", "description", "repo", "docs", "license", "tier", "requires_gpu", "external",
             "default_port", "install_memory", "install_cores", "runtime_memory", "runtime_cores", "disk",
             "playbook", "init_playbook", "customize_playbook", "unlock_playbook", "health_endpoint",
             "health_status_codes", "requires_database", "database_type", "requires_cache", "ha_strategy",
@@ -151,13 +151,13 @@ class ServiceInstanceExtensionForm(NetBoxModelForm):
     fieldsets = (
         FieldSet("instance", "kind", "name", "version", "enabled", "managed", name="Installed extension"),
         FieldSet("source_url", "branch", name="Source"),
-        FieldSet("module", "position", name="Loading"),
+        FieldSet("module", "position", "install_tier", name="Loading"),
     )
 
     class Meta:
         model = ServiceInstanceExtension
-        fields = ["instance", "kind", "name", "version", "source_url", "branch", "module", "position", "enabled",
-                  "managed", "tags"]
+        fields = ["instance", "kind", "name", "version", "source_url", "branch", "module", "position", "install_tier",
+                  "enabled", "managed", "tags"]
 
 
 class CatalogTestStateForm(NetBoxModelForm):
@@ -191,7 +191,7 @@ class ServiceInstanceForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet("catalog", "hostname", "status", name="Instance"),
-        FieldSet("device", "virtual_machine", name="Install target (set exactly one)"),
+        FieldSet("device", "virtual_machine", name="Install target (exactly one; none for an external catalog)"),
         FieldSet("actual_memory", "actual_cores", "actual_disk", name="Resources"),
         FieldSet("listeners", name="Listeners"),
     )
@@ -213,6 +213,13 @@ class ServiceInstanceForm(NetBoxModelForm):
         super().clean()
         device = self.cleaned_data.get("device")
         vm = self.cleaned_data.get("virtual_machine")
+        catalog = self.cleaned_data.get("catalog")
+        if catalog is not None and catalog.external:
+            if device or vm:
+                raise forms.ValidationError(f"{catalog.name} is external: its instances have no install target.")
+            self.instance.parent_object_type = None
+            self.instance.parent_object_id = None
+            return self.cleaned_data
         if bool(device) == bool(vm):
             raise forms.ValidationError("Set exactly one install target: a device or a virtual machine.")
         self.instance.parent = device or vm
@@ -401,6 +408,7 @@ class ServiceCatalogFilterForm(NetBoxModelFilterSetForm):
     database_type = forms.MultipleChoiceField(choices=DatabaseTypeChoices, required=False)
     ha_strategy = forms.MultipleChoiceField(choices=HAStrategyChoices, required=False)
     requires_gpu = forms.NullBooleanField(required=False)
+    external = forms.NullBooleanField(required=False)
     tag = TagFilterField(ServiceCatalog)
 
 
@@ -476,6 +484,7 @@ class ServiceInstanceExtensionFilterForm(NetBoxModelFilterSetForm):
     model = ServiceInstanceExtension
     instance_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Instance")
     kind = forms.MultipleChoiceField(choices=ExtensionKindChoices, required=False)
+    install_tier = forms.MultipleChoiceField(choices=ExtensionInstallTierChoices, required=False)
     enabled = forms.NullBooleanField(required=False)
     managed = forms.NullBooleanField(required=False)
     tag = TagFilterField(ServiceInstanceExtension)

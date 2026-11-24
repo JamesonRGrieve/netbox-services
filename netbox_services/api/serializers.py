@@ -30,7 +30,7 @@ class ServiceCatalogSerializer(NetBoxModelSerializer):
         model = ServiceCatalog
         fields = [
             "id", "url", "display", "name", "display_name", "description", "repo", "docs", "license",
-            "tier", "requires_gpu", "default_port", "install_memory", "install_cores",
+            "tier", "requires_gpu", "external", "default_port", "install_memory", "install_cores",
             "runtime_memory", "runtime_cores", "disk", "playbook", "init_playbook",
             "customize_playbook", "unlock_playbook", "health_endpoint", "health_status_codes",
             "requires_database", "database_type", "requires_cache", "ha_strategy",
@@ -166,7 +166,8 @@ class ServiceInstanceSerializer(NetBoxModelSerializer):
     catalog_install_cores = serializers.IntegerField(
         source="catalog.install_cores", read_only=True, allow_null=True
     )
-    parent_object_type = ContentTypeField(queryset=ContentType.objects.all())
+    parent_object_type = ContentTypeField(queryset=ContentType.objects.all(), required=False, allow_null=True)
+    catalog_external = serializers.BooleanField(source="catalog.external", read_only=True)
     parent = serializers.SerializerMethodField(read_only=True)
     listeners = SerializedPKRelatedField(
         queryset=Service.objects.all(), serializer=ServiceSerializer, nested=True, required=False, many=True
@@ -176,7 +177,7 @@ class ServiceInstanceSerializer(NetBoxModelSerializer):
         model = ServiceInstance
         fields = [
             "id", "url", "display", "catalog", "catalog_playbook", "catalog_default_port",
-            "catalog_requires_database", "catalog_install_memory", "catalog_install_cores", "parent_object_type", "parent_object_id", "parent",
+            "catalog_requires_database", "catalog_install_memory", "catalog_install_cores", "catalog_external", "parent_object_type", "parent_object_id", "parent",
             "hostname", "status", "actual_memory", "actual_cores", "actual_disk", "listeners", *_META,
         ]
         brief_fields = ["id", "url", "display", "catalog", "hostname", "status"]
@@ -252,7 +253,7 @@ class ServiceInstanceExtensionSerializer(NetBoxModelSerializer):
     class Meta:
         model = ServiceInstanceExtension
         fields = ["id", "url", "display", "instance", "kind", "name", "version", "source_url", "branch", "module",
-                  "position", "enabled", "managed", *_META]
+                  "position", "install_tier", "enabled", "managed", *_META]
         brief_fields = ["id", "url", "display", "kind", "name"]
 
 

@@ -6,7 +6,7 @@ import django_filters
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionInstallTierChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
     ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
@@ -69,7 +69,7 @@ class ServiceCatalogFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = ServiceCatalog
-        fields = ["id", "name", "display_name", "tier", "requires_gpu", "requires_database", "requires_cache"]
+        fields = ["id", "name", "display_name", "tier", "requires_gpu", "external", "requires_database", "requires_cache"]
 
     def search(self, queryset, name, value):
         return queryset.filter(
@@ -253,10 +253,11 @@ class ServiceInstanceConfigValueFilterSet(_InstanceChildFilterMixin):
 
 class ServiceInstanceExtensionFilterSet(_InstanceChildFilterMixin):
     kind = django_filters.MultipleChoiceFilter(choices=ExtensionKindChoices)
+    install_tier = django_filters.MultipleChoiceFilter(choices=ExtensionInstallTierChoices)
 
     class Meta:
         model = ServiceInstanceExtension
-        fields = ["id", "kind", "name", "version", "source_url", "branch", "module", "position", "enabled", "managed"]
+        fields = ["id", "kind", "name", "version", "source_url", "branch", "module", "position", "install_tier", "enabled", "managed"]
 
     def search(self, queryset, name, value):
         return queryset.filter(

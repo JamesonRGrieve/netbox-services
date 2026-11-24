@@ -34,6 +34,7 @@ from django.urls import reverse
 from ipam.choices import ServiceProtocolChoices
 from netbox.models import NetBoxModel
 from .choices import (
+    ExtensionInstallTierChoices,
     DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
     ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
@@ -63,6 +64,11 @@ class ServiceCatalog(NetBoxModel):
     license = models.CharField(max_length=100, blank=True)
     tier = models.PositiveSmallIntegerField(default=1, help_text="Test tier (distro breadth).")
     requires_gpu = models.BooleanField(default=False)
+    external = models.BooleanField(
+        default=False,
+        help_text="An outside service (SaaS) with no host of ours, e.g. a payment provider: its instances are "
+                  "accounts with no parent, named by hostname.",
+    )
 
     # Resources (flat columns, not a blob): install vs runtime, in MiB / cores / GiB.
     default_port = models.PositiveIntegerField(null=True, blank=True)
@@ -418,9 +424,9 @@ class ServiceInstance(NetBoxModel):
     catalog = models.ForeignKey(ServiceCatalog, on_delete=models.PROTECT, related_name="instances")
     parent_object_type = models.ForeignKey(
         "contenttypes.ContentType", on_delete=models.PROTECT, related_name="+",
-        limit_choices_to=PARENT_CT_LIMIT,
+        limit_choices_to=PARENT_CT_LIMIT, null=True, blank=True,
     )
-    parent_object_id = models.PositiveBigIntegerField()
+    parent_object_id = models.PositiveBigIntegerField(null=True, blank=True)
     parent = GenericForeignKey("parent_object_type", "parent_object_id")
     hostname = models.CharField(max_length=255, blank=True)
     status = models.CharField(
@@ -441,6 +447,21 @@ class ServiceInstance(NetBoxModel):
 
     def __str__(self):
         return f"{self.catalog.name} @ {self.hostname or self.parent}"
+
+    def clean(self):
+        """A hosted service needs its install target; an external one (``catalog.external``, e.g. a
+        payment provider's account) has none and is named by ``hostname``."""
+        super().clean()
+        has_parent = self.parent_object_type_id is not None or self.parent_object_id is not None
+        if self.catalog_id is None:
+            return
+        if self.catalog.external:
+            if has_parent:
+                raise ValidationError({"parent_object_type": f"{self.catalog.name} is external: its instances have no parent."})
+            if not self.hostname:
+                raise ValidationError({"hostname": "An external instance is named by hostname (the account it is)."})
+        elif self.parent_object_type_id is None or self.parent_object_id is None:
+            raise ValidationError({"parent_object_type": f"{self.catalog.name} instances need a parent (the VM or device they run on)."})
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_services:serviceinstance", args=[self.pk])
@@ -820,6 +841,11 @@ class ServiceInstanceExtension(NetBoxModel):
     enabled = models.BooleanField(default=True, help_text="Extension is activated on the instance.")
     managed = models.BooleanField(
         default=True, help_text="The tofu-services provider owns this extension's lifecycle."
+    )
+    install_tier = models.CharField(
+        max_length=16, choices=ExtensionInstallTierChoices, blank=True,
+        help_text="Where the extension installs in its service's dependency order (framework, site, dependent, "
+                  "last, after_last). Blank = no install order, or not installed yet.",
     )
 
     class Meta:

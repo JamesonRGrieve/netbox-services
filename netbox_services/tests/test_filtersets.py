@@ -36,6 +36,11 @@ class ServiceCatalogFilterTest(TestCase):
     def test_requires_gpu(self):
         self.assertEqual(self.filterset({"requires_gpu": True}, self.queryset).qs.count(), 1)
 
+    def test_external(self):
+        make_catalog("square", external=True)
+        self.assertEqual(self.filterset({"external": True}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({"external": False}, self.queryset).qs.count(), 3)
+
     def test_ha_strategy(self):
         self.assertEqual(
             self.filterset({"ha_strategy": [HAStrategyChoices.CONTENT_RSYNC]}, self.queryset).qs.count(), 1
@@ -232,6 +237,16 @@ class ServiceInstanceExtensionFilterTest(TestCase):
 
     def test_module(self):
         self.assertEqual(self.filterset({"module": ["netbox_dns"]}, self.queryset).qs.count(), 1)
+
+    def test_install_tier(self):
+        ServiceInstanceExtension.objects.create(
+            instance=self.instance, kind=ExtensionKindChoices.APP, name="payment_square", install_tier="dependent",
+        )
+        ServiceInstanceExtension.objects.create(
+            instance=self.instance, kind=ExtensionKindChoices.APP, name="frappe", install_tier="framework",
+        )
+        self.assertEqual(self.filterset({"install_tier": ["dependent"]}, self.queryset).qs.count(), 1)
+        self.assertEqual(self.filterset({"install_tier": ["dependent", "framework"]}, self.queryset).qs.count(), 2)
 
     def test_position(self):
         self.assertEqual(self.filterset({"position": [10]}, self.queryset).qs.count(), 1)

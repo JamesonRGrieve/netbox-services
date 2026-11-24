@@ -11,11 +11,11 @@ from ipam.models import Service
 from tenancy.models import Tenant
 from utilities.testing import create_test_device
 from ..choices import (
-    ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
+    ExtensionInstallTierChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
     ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
 )
 from ..models import (
-    CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
+    ServiceInstance, CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
     CatalogToken, HAMirror, HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration,
     IntegrationCatalog, IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
@@ -719,3 +719,87 @@ class InstanceOpenBaoPathVaultTest(TestCase):
         self.pointer(self.vm("prod-authentik"), vault=self.home)
         with self.assertRaises(models_ProtectedError):
             self.home.delete()
+
+
+class ExternalInstanceModelTest(TestCase):
+    """ServiceCatalog.external (an outside SaaS, e.g. a payment provider): its instances are accounts with
+    no parent, named by hostname; every hosted catalog still needs its parent (ServiceInstance.clean)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.square = make_catalog("square", external=True, default_port=None, playbook="")
+        cls.forgejo = make_catalog("forgejo")
+
+    def test_external_instance_saves_without_parent(self):
+        inst = ServiceInstance(catalog=self.square, hostname="handmade-by-hannah-sandbox")
+        inst.full_clean()
+        inst.save()
+        inst.refresh_from_db()
+        self.assertIsNone(inst.parent_object_type)
+        self.assertIsNone(inst.parent_object_id)
+        self.assertIsNone(inst.parent)
+        self.assertEqual(str(inst), "square @ handmade-by-hannah-sandbox")
+
+    def test_external_instance_rejects_a_parent(self):
+        inst = ServiceInstance(catalog=self.square, hostname="acct", parent=make_vm("vm-square"))
+        with self.assertRaises(ValidationError) as cm:
+            inst.full_clean()
+        self.assertIn("parent_object_type", cm.exception.message_dict)
+
+    def test_external_instance_needs_a_hostname(self):
+        inst = ServiceInstance(catalog=self.square, hostname="")
+        with self.assertRaises(ValidationError) as cm:
+            inst.full_clean()
+        self.assertIn("hostname", cm.exception.message_dict)
+
+    def test_hosted_instance_still_needs_a_parent(self):
+        inst = ServiceInstance(catalog=self.forgejo, hostname="git")
+        with self.assertRaises(ValidationError) as cm:
+            inst.full_clean()
+        self.assertIn("parent_object_type", cm.exception.message_dict)
+
+    def test_hosted_instance_with_parent_is_valid(self):
+        inst = ServiceInstance(catalog=self.forgejo, hostname="git", parent=make_vm("vm-git"))
+        inst.full_clean()
+
+    def test_catalog_external_defaults_false(self):
+        self.assertFalse(self.forgejo.external)
+        self.assertTrue(self.square.external)
+
+    def test_external_instance_openbao_path_uses_the_untenanted_vault(self):
+        vault = make_instance(make_catalog("openbao"), hostname="bao", status=ServiceInstanceStatusChoices.ACTIVE)
+        acct = ServiceInstance.objects.create(catalog=self.square, hostname="acct")
+        p = InstanceOpenBaoPath.objects.create(
+            instance=acct, key="token", path="prod/zephyrex/external/square/acct/sandbox/api", field="token",
+        )
+        self.assertEqual(p.effective_vault, vault)
+
+
+class ExtensionInstallTierModelTest(TestCase):
+    """ServiceInstanceExtension.install_tier: an app's place in its service's install order."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.instance = make_instance(make_catalog("erpnext"), hostname="erp")
+
+    def test_install_tier_defaults_blank(self):
+        ext = ServiceInstanceExtension.objects.create(instance=self.instance, kind=ExtensionKindChoices.APP, name="crm")
+        self.assertEqual(ext.install_tier, "")
+
+    def test_install_tier_round_trip_every_choice(self):
+        for i, (tier, _label, _color) in enumerate(ExtensionInstallTierChoices.CHOICES):
+            ext = ServiceInstanceExtension.objects.create(
+                instance=self.instance, kind=ExtensionKindChoices.APP, name=f"app{i}", install_tier=tier,
+            )
+            ext.refresh_from_db()
+            self.assertEqual(ext.install_tier, tier)
+            ext.full_clean()
+
+    def test_install_tier_rejects_an_unknown_tier(self):
+        ext = ServiceInstanceExtension(
+            instance=self.instance, kind=ExtensionKindChoices.APP, name="bad", install_tier="sometime",
+        )
+        with self.assertRaises(ValidationError) as cm:
+            ext.full_clean()
+        self.assertIn("install_tier", cm.exception.message_dict)
+

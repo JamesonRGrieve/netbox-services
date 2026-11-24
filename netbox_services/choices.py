@@ -178,3 +178,24 @@ class SecretKindChoices(ChoiceSet):
         (SEAL_KEY, "Seal key", "yellow"),
         (APPROLE_SECRET_ID, "AppRole secret id", "gray"),
     ]
+
+
+class ExtensionInstallTierChoices(ChoiceSet):
+    """Where an app extension installs in its service's dependency order (Frappe benches first): the
+    ``framework`` itself, then ``site`` apps, then ``dependent`` apps that need a site app first, then
+    ``last`` (the one app that must install after every other, e.g. one whose hook must win), then
+    ``after_last`` (apps that require the ``last`` app and add no hook that would displace it). Blank =
+    the service has no install order (e.g. WordPress plugins), or the app is declared but not installed."""
+    FRAMEWORK = "framework"
+    SITE = "site"
+    DEPENDENT = "dependent"
+    LAST = "last"
+    AFTER_LAST = "after_last"
+    CHOICES = [
+        (FRAMEWORK, "Framework", "red"),
+        (SITE, "Site", "blue"),
+        (DEPENDENT, "Dependent", "purple"),
+        (LAST, "Last", "gray"),
+        (AFTER_LAST, "After last", "orange"),
+    ]
+
