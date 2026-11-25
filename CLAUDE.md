@@ -89,6 +89,11 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
 - **InstanceOpenBaoPath** (FK): `key`, `path` (credential/token references → OpenBao), optional `field`
   (the key inside that secret when it differs from `key`, so a pointer can follow the OpenBao grammar's
   purpose leaves, e.g. `admin_password` → `…/svc/<service>/admin` field `password`; blank = `key`).
+  `generator` (`InstanceOpenBaoPathGeneratorChoices`: blank = supplied, `alnum32`, `policy32`) says
+  whether the pipeline generates the value at `path` + `effective_field`, and to which shape; filter
+  `?generator=`. `clean()` rejects two *different* non-blank generators at one path + effective field;
+  blank beside a generator is allowed (rows are marked one at a time; the tofu consumer enforces
+  whole-leaf marking).
   Optional `vault` FK → an `openbao`-catalog ServiceInstance (PROTECT), set only for a cross-OU read;
   the read-only `effective_vault` (API, table) is `vault`, else the single **active** openbao instance
   whose host has the same tenant as the pointer's host, else the active one on an untenanted host

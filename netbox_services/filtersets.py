@@ -8,7 +8,7 @@ from netbox.filtersets import NetBoxModelFilterSet
 from .choices import (
     DatabaseTypeChoices, DistroChoices, ExtensionInstallTierChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
-    ProviderScopeChoices, ServiceInstanceStatusChoices,
+    ProviderScopeChoices, ServiceInstanceStatusChoices, InstanceOpenBaoPathGeneratorChoices,
 )
 from .models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
@@ -200,10 +200,11 @@ class InstanceOpenBaoPathFilterSet(_InstanceChildFilterMixin):
     vault_id = django_filters.ModelMultipleChoiceFilter(
         field_name="vault", queryset=ServiceInstance.objects.all(), label="Vault (ID)"
     )
+    generator = django_filters.MultipleChoiceFilter(choices=InstanceOpenBaoPathGeneratorChoices)
 
     class Meta:
         model = InstanceOpenBaoPath
-        fields = ["id", "key", "path", "field"]
+        fields = ["id", "key", "path", "field", "generator"]
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(key__icontains=value) | Q(path__icontains=value))

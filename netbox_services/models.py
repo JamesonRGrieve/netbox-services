@@ -34,7 +34,7 @@ from django.urls import reverse
 from ipam.choices import ServiceProtocolChoices
 from netbox.models import NetBoxModel
 from .choices import (
-    ExtensionInstallTierChoices,
+    ExtensionInstallTierChoices, InstanceOpenBaoPathGeneratorChoices,
     DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
     ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
@@ -491,6 +491,13 @@ class InstanceOpenBaoPath(NetBoxModel):
         help_text="The OpenBao instance holding path, when it is not the owner's own vault "
                   "(a cross-OU read). Blank = effective_vault's tenant rule.",
     )
+    generator = models.CharField(
+        max_length=30, choices=InstanceOpenBaoPathGeneratorChoices, blank=True, default="",
+        help_text="How the pipeline generates the value at path + effective field (alnum32, policy32). "
+                  "Blank = supplied, never generated or overwritten. Pointers at one path + effective field "
+                  "may not name two different generators; blank beside a generator is allowed (the consumer "
+                  "checks whole-leaf marking).",
+    )
 
     class Meta:
         ordering = ["instance", "key"]
@@ -511,6 +518,18 @@ class InstanceOpenBaoPath(NetBoxModel):
         super().clean()
         if self.vault_id and self.vault.catalog.name != OPENBAO_CATALOG:
             raise ValidationError({"vault": f"{self.vault} is not an {OPENBAO_CATALOG} instance."})
+        if self.generator:
+            field = self.effective_field
+            clash = next((o for o in InstanceOpenBaoPath.objects.filter(path=self.path).exclude(pk=self.pk)
+                          .exclude(generator__in=("", self.generator)) if o.effective_field == field), None)
+            if clash:
+                raise ValidationError({"generator": f"{clash} marks {self.path} [{field}] as {clash.generator}; "
+                                                    f"pointers at one leaf field cannot name two generators."})
+
+    @property
+    def effective_field(self):
+        """The key read inside the secret at ``path``: ``field``, else ``key``."""
+        return self.field or self.key
 
     @property
     def effective_vault(self):

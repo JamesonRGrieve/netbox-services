@@ -203,7 +203,7 @@ class InstanceOpenBaoPathSerializer(NetBoxModelSerializer):
 
     class Meta:
         model = InstanceOpenBaoPath
-        fields = ["id", "url", "display", "instance", "key", "path", "field", "vault", "effective_vault", *_META]
+        fields = ["id", "url", "display", "instance", "key", "path", "field", "generator", "vault", "effective_vault", *_META]
         brief_fields = ["id", "url", "display", "key"]
 
     @extend_schema_field(ServiceInstanceSerializer(nested=True, allow_null=True))

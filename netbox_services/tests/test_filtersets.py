@@ -470,6 +470,14 @@ class InstanceOpenBaoPathFilterTest(TestCase):
         inst = make_instance(make_catalog("authentik"), hostname="prod-authentik")
         InstanceOpenBaoPath.objects.create(instance=inst, key="boden_oauth", path="prod/boden/x", vault=cls.vault)
         InstanceOpenBaoPath.objects.create(instance=inst, key="db", path="prod/zephyrex/x")
+        InstanceOpenBaoPath.objects.create(instance=inst, key="app", path="prod/omg/guest/a/svc/app", generator="alnum32")
+        InstanceOpenBaoPath.objects.create(instance=inst, key="root", path="prod/omg/guest/o/svc/root", generator="policy32")
+
+    def test_generator(self):
+        keys = lambda params: sorted(self.filterset(params, self.queryset).qs.values_list("key", flat=True))
+        self.assertEqual(keys({"generator": ["alnum32"]}), ["app"])
+        self.assertEqual(keys({"generator": ["alnum32", "policy32"]}), ["app", "root"])
+        self.assertEqual(keys({"generator__n": ["alnum32", "policy32"]}), ["boden_oauth", "db"])
 
     def test_vault_id(self):
         self.assertEqual(self.filterset({"vault_id": [self.vault.pk]}, self.queryset).qs.get().key, "boden_oauth")

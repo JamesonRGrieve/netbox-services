@@ -12,7 +12,7 @@ from tenancy.models import Tenant
 from utilities.testing import create_test_device
 from ..choices import (
     ExtensionInstallTierChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices, IntegrationParamValueTypeChoices,
-    ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
+    ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices, InstanceOpenBaoPathGeneratorChoices,
 )
 from ..models import (
     ServiceInstance, CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogTestIntegration, CatalogTestState,
@@ -803,3 +803,58 @@ class ExtensionInstallTierModelTest(TestCase):
             ext.full_clean()
         self.assertIn("install_tier", cm.exception.message_dict)
 
+
+
+class InstanceOpenBaoPathGeneratorTest(TestCase):
+    """generator: blank (supplied) by default; pointers at one path + effective field may not name two
+    different generators, while blank beside a generator is allowed (the consumer checks whole-leaf marking)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.app = make_catalog("wordpress")
+        cls.a = make_instance(cls.app, hostname="prod-wp-livex")
+        cls.b = make_instance(cls.app, hostname="prod-wp-livex-mirror")
+
+    def pointer(self, instance, generator, key="db", field="", path="prod/omg/guest/livex/svc/db"):
+        p = InstanceOpenBaoPath(instance=instance, key=key, path=path, field=field, generator=generator)
+        p.full_clean()
+        p.save()
+        return p
+
+    def test_defaults_to_supplied(self):
+        p = InstanceOpenBaoPath.objects.create(instance=self.a, key="db", path="prod/x")
+        self.assertEqual(p.generator, InstanceOpenBaoPathGeneratorChoices.SUPPLIED)
+
+    def test_blank_beside_a_generator_is_accepted(self):
+        self.pointer(self.a, "")
+        self.pointer(self.b, "alnum32")
+        self.pointer(self.a, "policy32", key="other", path="prod/omg/guest/livex/svc/other")
+
+    def test_marking_one_twin_at_a_time_is_accepted(self):
+        first, second = self.pointer(self.a, ""), self.pointer(self.b, "")
+        for p in (first, second):
+            p.generator = "alnum32"
+            p.full_clean()
+            p.save()
+        self.assertEqual(set(InstanceOpenBaoPath.objects.values_list("generator", flat=True)), {"alnum32"})
+
+    def test_same_generator_is_accepted(self):
+        self.pointer(self.a, "alnum32")
+        self.pointer(self.b, "alnum32")
+
+    def test_different_generators_on_one_leaf_field_are_rejected(self):
+        self.pointer(self.a, "alnum32")
+        with self.assertRaises(ValidationError) as e:
+            self.pointer(self.b, "policy32")
+        self.assertIn("generator", e.exception.message_dict)
+
+    def test_effective_field_decides_the_leaf_field(self):
+        self.pointer(self.a, "alnum32", key="admin_password", field="password")
+        with self.assertRaises(ValidationError):
+            self.pointer(self.b, "policy32", key="password")
+        self.pointer(self.b, "policy32", key="token")
+
+    def test_editing_a_row_does_not_clash_with_itself(self):
+        p = self.pointer(self.a, "alnum32")
+        p.generator = "policy32"
+        p.full_clean()

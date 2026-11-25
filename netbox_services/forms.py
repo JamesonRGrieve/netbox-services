@@ -12,7 +12,7 @@ from utilities.forms.fields import (
 from utilities.forms.rendering import FieldSet
 from virtualization.models import VirtualMachine
 from .choices import (
-    DatabaseTypeChoices, DistroChoices, ExtensionInstallTierChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
+    DatabaseTypeChoices, DistroChoices, ExtensionInstallTierChoices, InstanceOpenBaoPathGeneratorChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
     ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
@@ -232,11 +232,11 @@ class InstanceOpenBaoPathForm(NetBoxModelForm):
         queryset=ServiceInstance.objects.filter(catalog__name=OPENBAO_CATALOG), required=False,
         query_params={"catalog": OPENBAO_CATALOG},
     )
-    fieldsets = (FieldSet("instance", "key", "path", "field", "vault", name="OpenBao reference"),)
+    fieldsets = (FieldSet("instance", "key", "path", "field", "generator", "vault", name="OpenBao reference"),)
 
     class Meta:
         model = InstanceOpenBaoPath
-        fields = ["instance", "key", "path", "field", "vault", "tags"]
+        fields = ["instance", "key", "path", "field", "generator", "vault", "tags"]
 
 
 class IntegrationForm(NetBoxModelForm):
@@ -518,6 +518,7 @@ class InstanceOpenBaoPathFilterForm(NetBoxModelFilterSetForm):
         queryset=ServiceInstance.objects.filter(catalog__name=OPENBAO_CATALOG), required=False, label="Vault",
         query_params={"catalog": OPENBAO_CATALOG},
     )
+    generator = forms.MultipleChoiceField(choices=InstanceOpenBaoPathGeneratorChoices, required=False)
     tag = TagFilterField(InstanceOpenBaoPath)
 
 

@@ -362,6 +362,24 @@ class InstanceOpenBaoPathAPITest(_CRUD):
         self.assertEqual(r.data["vault"]["id"], home.pk)
 
 
+    def test_generator_round_trips_and_filters(self):
+        self.add_permissions("netbox_services.view_instanceopenbaopath", "netbox_services.change_instanceopenbaopath")
+        p, twin = InstanceOpenBaoPath.objects.get(key="k2"), InstanceOpenBaoPath.objects.get(key="k0")
+        url = reverse("plugins-api:netbox_services-api:instanceopenbaopath-detail", kwargs={"pk": p.pk})
+        self.assertEqual(self.client.get(url, **self.header).data["generator"], "")
+        r = self.client.patch(url, {"generator": "alnum32"}, format="json", **self.header)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data["generator"], "alnum32")
+        self.assertEqual(self.client.patch(url, {"generator": "bogus"}, format="json", **self.header).status_code, 400)
+        twin_url = reverse("plugins-api:netbox_services-api:instanceopenbaopath-detail", kwargs={"pk": twin.pk})
+        self.client.patch(twin_url, {"path": p.path, "field": "k2"}, format="json", **self.header)
+        self.assertEqual(self.client.patch(twin_url, {"generator": "policy32"}, format="json", **self.header).status_code, 400)
+        self.assertEqual(self.client.patch(twin_url, {"generator": "alnum32"}, format="json", **self.header).status_code, 200)
+        listed = self.client.get(reverse("plugins-api:netbox_services-api:instanceopenbaopath-list") + "?generator=alnum32",
+                                 **self.header).data
+        self.assertEqual(sorted(r["key"] for r in listed["results"]), ["k0", "k2"])
+
+
 class ServiceInstanceConfigValueAPITest(_CRUD):
     model = ServiceInstanceConfigValue
     brief_fields = ["display", "id", "param", "url", "value"]
