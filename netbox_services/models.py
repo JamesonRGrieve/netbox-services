@@ -493,10 +493,11 @@ class InstanceOpenBaoPath(NetBoxModel):
     )
     generator = models.CharField(
         max_length=30, choices=InstanceOpenBaoPathGeneratorChoices, blank=True, default="",
-        help_text="How the pipeline generates the value at path + effective field (alnum32, policy32). "
+        help_text="How the pipeline generates the value at path + effective field (alnum32, policy32, fernet32, "
+                  "ed25519, ed25519_public), or config (a copy of the instance's <catalog>_<key> config value). "
                   "Blank = supplied, never generated or overwritten. Pointers at one path + effective field "
                   "may not name two different generators; blank beside a generator is allowed (the consumer "
-                  "checks whole-leaf marking).",
+                  "checks whole-leaf marking). ed25519_public needs an ed25519 pointer at the same path.",
     )
 
     class Meta:
@@ -525,6 +526,15 @@ class InstanceOpenBaoPath(NetBoxModel):
             if clash:
                 raise ValidationError({"generator": f"{clash} marks {self.path} [{field}] as {clash.generator}; "
                                                     f"pointers at one leaf field cannot name two generators."})
+        if self.generator == InstanceOpenBaoPathGeneratorChoices.ED25519_PUBLIC and not InstanceOpenBaoPath.objects.filter(
+            path=self.path, generator=InstanceOpenBaoPathGeneratorChoices.ED25519
+        ).exclude(pk=self.pk).exists():
+            raise ValidationError({"generator": f"{self.path} has a public half but no ed25519 private key."})
+        if self.generator == InstanceOpenBaoPathGeneratorChoices.CONFIG and self.instance_id:
+            name = f"{self.instance.catalog.name}_{self.key}"
+            if not ServiceInstanceConfigValue.objects.filter(instance_id=self.instance_id, param__key=name).exists():
+                raise ValidationError({"generator": f"{self.instance} has no {name} config value to copy into "
+                                                    f"{self.path} [{self.effective_field}]."})
 
     @property
     def effective_field(self):

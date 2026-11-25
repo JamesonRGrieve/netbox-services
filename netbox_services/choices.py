@@ -206,12 +206,22 @@ class InstanceOpenBaoPathGeneratorChoices(ChoiceSet):
     the pipeline, and to which shape. Blank = supplied (a person or another system puts it in OpenBao;
     the pipeline never generates or overwrites it). Values name the shape, not the tool that makes it,
     so a row stays true if generation moves (e.g. to an OpenBao generate class); extend the set the
-    same way ``SecretKindChoices`` grows."""
+    same way ``SecretKindChoices`` grows. ``config`` is not generated: the pipeline writes the owning
+    instance's config value of the same name (``<catalog>_<key>``, the name netbox_config gives the
+    pointer) into the leaf."""
     SUPPLIED = ""
     ALNUM32 = "alnum32"
     POLICY32 = "policy32"
+    FERNET32 = "fernet32"
+    ED25519 = "ed25519"
+    ED25519_PUBLIC = "ed25519_public"
+    CONFIG = "config"
     CHOICES = [
         (SUPPLIED, "Supplied", "gray"),
         (ALNUM32, "32 letters and digits", "blue"),
         (POLICY32, "32 chars, lower/upper/digit/special (-_.)", "purple"),
+        (FERNET32, "32 random bytes, URL-safe base64 (Fernet)", "teal"),
+        (ED25519, "ed25519 private key (OpenSSH)", "orange"),
+        (ED25519_PUBLIC, "the same key's public half", "orange"),
+        (CONFIG, "a copy of the instance's config value", "gray"),
     ]

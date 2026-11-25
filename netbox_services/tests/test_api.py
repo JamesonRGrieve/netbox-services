@@ -380,6 +380,25 @@ class InstanceOpenBaoPathAPITest(_CRUD):
         self.assertEqual(sorted(r["key"] for r in listed["results"]), ["k0", "k2"])
 
 
+    def test_new_generator_values_round_trip(self):
+        self.add_permissions("netbox_services.view_instanceopenbaopath", "netbox_services.change_instanceopenbaopath")
+        url = lambda p: reverse("plugins-api:netbox_services-api:instanceopenbaopath-detail", kwargs={"pk": p.pk})
+        priv, pub = InstanceOpenBaoPath.objects.get(key="k0"), InstanceOpenBaoPath.objects.get(key="k1")
+        r = self.client.patch(url(priv), {"path": "secret/data/deploy", "field": "private_key", "generator": "ed25519"},
+                              format="json", **self.header)
+        self.assertEqual((r.status_code, r.data["generator"]), (200, "ed25519"))
+        r = self.client.patch(url(pub), {"path": "secret/data/deploy", "field": "public_key", "generator": "ed25519_public"},
+                              format="json", **self.header)
+        self.assertEqual((r.status_code, r.data["generator"]), (200, "ed25519_public"))
+        r = self.client.patch(url(InstanceOpenBaoPath.objects.get(key="k2")), {"generator": "fernet32"}, format="json", **self.header)
+        self.assertEqual((r.status_code, r.data["generator"]), (200, "fernet32"))
+        self.assertEqual(self.client.patch(url(InstanceOpenBaoPath.objects.get(key="k2")), {"generator": "config"},
+                                           format="json", **self.header).status_code, 400)
+        listed = self.client.get(reverse("plugins-api:netbox_services-api:instanceopenbaopath-list") + "?generator=fernet32",
+                                 **self.header).data
+        self.assertEqual([r["key"] for r in listed["results"]], ["k2"])
+
+
 class ServiceInstanceConfigValueAPITest(_CRUD):
     model = ServiceInstanceConfigValue
     brief_fields = ["display", "id", "param", "url", "value"]

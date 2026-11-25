@@ -858,3 +858,56 @@ class InstanceOpenBaoPathGeneratorTest(TestCase):
         p = self.pointer(self.a, "alnum32")
         p.generator = "policy32"
         p.full_clean()
+
+
+class InstanceOpenBaoPathGeneratorKindsTest(TestCase):
+    """fernet32, ed25519, ed25519_public and config: an ed25519_public pointer needs an ed25519 pointer at
+    the same path; a config pointer needs the instance's <catalog>_<key> config value; the two-marks rule
+    still holds across the new values."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.app = make_catalog("nextcloud")
+        cls.inst = make_instance(cls.app, hostname="prod-nextcloud")
+        cls.other = make_instance(cls.app, hostname="prod-nextcloud-2")
+        cls.p_user = CatalogConfigParam.objects.create(
+            catalog=cls.app, key="nextcloud_admin_user", value_type=IntegrationParamValueTypeChoices.STRING,
+            default="", provider_attr="",
+        )
+
+    def pointer(self, generator, key, path, instance=None, field=""):
+        p = InstanceOpenBaoPath(instance=instance or self.inst, key=key, path=path, field=field, generator=generator)
+        p.full_clean()
+        p.save()
+        return p
+
+    def test_new_values_are_valid_choices(self):
+        for i, g in enumerate(("fernet32", "ed25519")):
+            self.assertEqual(self.pointer(g, f"k{i}", f"prod/zephyrex/guest/x/svc/k{i}").generator, g)
+
+    def test_public_half_needs_its_private_key(self):
+        with self.assertRaises(ValidationError) as e:
+            self.pointer("ed25519_public", "deploy_pub", "prod/zephyrex/guest/x/svc/deploy", field="public_key")
+        self.assertIn("generator", e.exception.message_dict)
+        self.pointer("ed25519", "deploy_key", "prod/zephyrex/guest/x/svc/deploy", field="private_key")
+        self.pointer("ed25519_public", "deploy_pub", "prod/zephyrex/guest/x/svc/deploy", field="public_key")
+
+    def test_private_key_elsewhere_does_not_count(self):
+        self.pointer("ed25519", "deploy_key", "prod/zephyrex/guest/x/svc/other", field="private_key")
+        with self.assertRaises(ValidationError):
+            self.pointer("ed25519_public", "deploy_pub", "prod/zephyrex/guest/x/svc/deploy", field="public_key")
+
+    def test_config_needs_the_instance_config_value(self):
+        with self.assertRaises(ValidationError) as e:
+            self.pointer("config", "admin_user", "prod/zephyrex/guest/x/svc/admin", field="username")
+        self.assertIn("nextcloud_admin_user", str(e.exception))
+        ServiceInstanceConfigValue.objects.create(instance=self.other, param=self.p_user, value="ops")
+        with self.assertRaises(ValidationError):
+            self.pointer("config", "admin_user", "prod/zephyrex/guest/x/svc/admin", field="username")
+        ServiceInstanceConfigValue.objects.create(instance=self.inst, param=self.p_user, value="admin")
+        self.pointer("config", "admin_user", "prod/zephyrex/guest/x/svc/admin", field="username")
+
+    def test_two_marks_rule_still_rejects_fernet_beside_alnum(self):
+        self.pointer("alnum32", "secret_key", "prod/zephyrex/guest/x/svc/app", field="key")
+        with self.assertRaises(ValidationError):
+            self.pointer("fernet32", "secret_key", "prod/zephyrex/guest/x/svc/app", instance=self.other, field="key")
