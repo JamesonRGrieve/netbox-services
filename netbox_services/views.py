@@ -428,6 +428,31 @@ class HAMirrorBulkDeleteView(generic.BulkDeleteView):
     table = tables.HAMirrorTable
 
 
+class HAMirrorPolicyView(generic.ObjectView):
+    queryset = models.HAMirrorPolicy.objects.all()
+
+
+class HAMirrorPolicyListView(generic.ObjectListView):
+    queryset = models.HAMirrorPolicy.objects.all()
+    table = tables.HAMirrorPolicyTable
+    filterset = filtersets.HAMirrorPolicyFilterSet
+    filterset_form = forms.HAMirrorPolicyFilterForm
+
+
+class HAMirrorPolicyEditView(generic.ObjectEditView):
+    queryset = models.HAMirrorPolicy.objects.all()
+    form = forms.HAMirrorPolicyForm
+
+
+class HAMirrorPolicyDeleteView(generic.ObjectDeleteView):
+    queryset = models.HAMirrorPolicy.objects.all()
+
+
+class HAMirrorPolicyBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.HAMirrorPolicy.objects.all()
+    table = tables.HAMirrorPolicyTable
+
+
 class HostRoleView(generic.ObjectView):
     queryset = models.HostRole.objects.all()
 

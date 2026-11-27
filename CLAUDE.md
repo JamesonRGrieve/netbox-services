@@ -56,7 +56,8 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
 | `__init__.py` | `PluginConfig` — name `netbox_services`, `base_url='services'`, min/max 4.6; `ready()` wires `signals` |
 | `choices.py` | `ChoiceSet`s: instance status, provider scope, HA strategy, distro, database type (port protocol reuses core `ipam.choices`) |
 | `models.py` | typed catalog/instance/rotation models + validation helpers |
-| `signals.py` | `pre_save` backstop calling `validate_integration_cardinality` (catches ORM/seeder writes that bypass `clean()`) |
+| `signals.py` | `pre_save` backstop calling `validate_integration_cardinality` (catches ORM/seeder writes that bypass `clean()`); post-commit HA mirror hooks (VM, netbox-guests GuestProfile, ServiceInstance, config value) calling `ha_derive.derive_for_vm` |
+| `ha_derive.py` | derives a primary guest's HA mirror intent from `HAMirrorPolicy` (guest, profile, NIC + gateway + IP, instances, config values, HAMirror rows, netbox-database server/replication/nodes); create + sync, never deletes a mirror |
 | `migrations/0001_initial.py` | hand-authored (NetBox disables makemigrations in prod); verify with `makemigrations --check --dry-run` |
 | `api/serializers.py`, `api/views.py`, `api/urls.py` | REST (`NetBoxModelViewSet`) — the contract the provider + seeder read |
 | `filtersets.py` | `NetBoxModelFilterSet` per model |
@@ -114,7 +115,21 @@ repeating records (credentials, tokens, ports, openbao paths, test results), nev
   its `value_type` parse, and an **inline value on a secret param** (must be an OpenBao path — secret
   values never live here); the edge's `clean()` rejects a missing required param without a default.
 - **HAMirror** (edge): `mirror`/`primary` FK → ServiceInstance; `unique(mirror, primary)`; both
-  must be the same catalog type; the reconciler reads `mirror.catalog.ha_strategy`.
+  must be the same catalog type; the reconciler reads `mirror.catalog.ha_strategy`. `active_node`,
+  `cloudflare_lb`, and `seeded` (the mirror holds the primary's data; the omg root starts
+  replication both ways only then).
+- **HAMirrorPolicy** (rule, card 404): a guest in `source_cluster` named `source_name_prefix…` gets
+  a mirror `mirror_name_prefix…` in `target_cluster` (host `target_device`): VMID + `vmid_offset`,
+  interface `interface_name` on `vlan` with `gateway`, address = the primary's host offset inside
+  `prefix`; one instance per primary instance of a `catalogs` type, config values per
+  `CatalogConfigParam.mirror_mode` (`copy` | `omit` | `fixed` → `mirror_value`), an HAMirror row per
+  catalog whose `ha_strategy` is not none, and for MariaDB master-master the netbox-database server +
+  group `replication_name_prefix<key>-replication` + nodes (server ids = VMIDs). `ha_derive` creates
+  and syncs (sizing, guest shape, config); a mirror's status, swap, journald management, LXC
+  features (`["nesting"]` at create), node/pool/storage and credentials stay its own. Required legacy
+  VM custom fields (netbox-guests' `guest_type`) are copied at create. Policy saves trigger nothing;
+  a change to a matching primary does, after commit. netbox-guests and netbox-database are optional
+  (`apps.is_installed`); without netbox-guests nothing is derived.
 - **RotationPolicy**: service instance + secret kind + OpenBao path reference + cadence/on-demand
   trigger metadata + atomic HostRole + consumer M2M fan-out + optional Semaphore schedule ref.
   Secret values never enter NetBox.

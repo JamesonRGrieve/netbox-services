@@ -48,6 +48,7 @@ menu = PluginMenu(
                 _item("integration", "Integrations"),
                 _item("integrationparam", "Integration Params"),
                 _item("hamirror", "HA Mirrors"),
+                _item("hamirrorpolicy", "HA Mirror Policies"),
             ),
         ),
         (

@@ -29,7 +29,8 @@ class NetBoxServicesConfig(PluginConfig):
 
     def ready(self):
         super().ready()
-        from . import signals  # noqa: F401  (connects the cardinality pre_save backstop)
+        from . import signals  # connects the cardinality backstop and the HA mirror derivation hooks
+        signals.connect_guest_profile()
 
 
 config = NetBoxServicesConfig

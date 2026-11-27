@@ -5,14 +5,15 @@ declared explicitly (django-filter does not derive ``<fk>_id`` from a bare FK): 
 import django_filters
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
+from virtualization.models import Cluster
 from .choices import (
     DatabaseTypeChoices, DistroChoices, ExtensionInstallTierChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
-    ProviderScopeChoices, ServiceInstanceStatusChoices, InstanceOpenBaoPathGeneratorChoices,
+    MirrorModeChoices, ProviderScopeChoices, ServiceInstanceStatusChoices, InstanceOpenBaoPathGeneratorChoices,
 )
 from .models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
-    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HAMirrorPolicy, HostRole,
     HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
     RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
@@ -132,10 +133,11 @@ class IntegrationCatalogParamFilterSet(NetBoxModelFilterSet):
 
 class CatalogConfigParamFilterSet(_CatalogChildFilterMixin):
     value_type = django_filters.MultipleChoiceFilter(choices=IntegrationParamValueTypeChoices)
+    mirror_mode = django_filters.MultipleChoiceFilter(choices=MirrorModeChoices)
 
     class Meta:
         model = CatalogConfigParam
-        fields = ["id", "key", "value_type", "required", "secret", "provider_attr"]
+        fields = ["id", "key", "value_type", "required", "secret", "provider_attr", "mirror_mode"]
 
     def search(self, queryset, name, value):
         return queryset.filter(
@@ -277,10 +279,26 @@ class HAMirrorFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = HAMirror
-        fields = ["id", "active_node", "cloudflare_lb"]
+        fields = ["id", "active_node", "cloudflare_lb", "seeded"]
 
     def search(self, queryset, name, value):
         return queryset.filter(Q(mirror__hostname__icontains=value) | Q(primary__hostname__icontains=value))
+
+
+class HAMirrorPolicyFilterSet(NetBoxModelFilterSet):
+    source_cluster_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="source_cluster", queryset=Cluster.objects.all(), label="Source cluster (ID)"
+    )
+    target_cluster_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="target_cluster", queryset=Cluster.objects.all(), label="Target cluster (ID)"
+    )
+
+    class Meta:
+        model = HAMirrorPolicy
+        fields = ["id", "name", "enabled", "source_name_prefix", "mirror_name_prefix"]
+
+    def search(self, queryset, name, value):
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
 
 
 class HostRoleFilterSet(NetBoxModelFilterSet):

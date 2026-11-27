@@ -5,11 +5,14 @@ unbounded provider) so the pre_save backstop accepts every created edge."""
 import unittest
 
 from django.urls import reverse
+from ipam.models import Prefix, VLAN
+from netaddr import IPNetwork
 from utilities.testing import APIViewTestCases, create_test_device
+from virtualization.models import Cluster, ClusterType
 from ..choices import ExtensionKindChoices, IntegrationParamValueTypeChoices, SecretKindChoices
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogSecondaryPort,
-    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole, HostRoleAssignment,
+    CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HAMirrorPolicy, HostRole, HostRoleAssignment,
     HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog, IntegrationCatalogParam,
     IntegrationParam, InstanceOpenBaoPath, RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
     ServiceInstanceExtension,
@@ -164,6 +167,8 @@ class CatalogConfigParamAPITest(_CRUD):
              "provider_attr": "forgejo_service.workers"},
             {"catalog": cat.pk, "key": "allowed_hosts", "value_type": "list", "required": True},
             {"catalog": cat.pk, "key": "smtp_password", "value_type": "secret_ref", "secret": True},
+            {"catalog": cat.pk, "key": "force_ssl", "value_type": "bool", "mirror_mode": "fixed", "mirror_value": "false"},
+            {"catalog": cat.pk, "key": "sso_slug", "value_type": "string", "mirror_mode": "omit"},
         ]
 
 
@@ -542,7 +547,34 @@ class HAMirrorAPITest(_CRUD):
             {"mirror": mirrors[4].pk, "primary": primaries[4].pk, "cloudflare_lb": True},
             {"mirror": mirrors[5].pk, "primary": primaries[5].pk, "active_node": "mirror", "cloudflare_lb": True},
         ]
-        cls.bulk_update_data = {"active_node": "mirror", "cloudflare_lb": True}
+        cls.bulk_update_data = {"active_node": "mirror", "cloudflare_lb": True, "seeded": True}
+
+
+class HAMirrorPolicyAPITest(_CRUD):
+    model = HAMirrorPolicy
+    brief_fields = ["display", "id", "name", "url"]
+    bulk_update_data = {"enabled": False, "replication_semi_sync": False}
+
+    @classmethod
+    def setUpTestData(cls):
+        ctype = ClusterType.objects.create(name="PVE", slug="pve")
+        source = Cluster.objects.create(name="omg-proxmox", type=ctype)
+        target = Cluster.objects.create(name="backup", type=ctype)
+        vlan = VLAN.objects.create(vid=11, name="HA_OMG")
+        prefix = Prefix.objects.create(prefix=IPNetwork("198.18.0.0/24"), vlan=vlan)
+        wp, db = make_catalog("wordpress"), make_catalog("mariadb")
+        common = dict(source_cluster=source, target_cluster=target, vlan=vlan, prefix=prefix, gateway="198.18.0.254",
+                      mirror_name_prefix="mirror-", vmid_offset=10700)
+        for i in range(3):
+            HAMirrorPolicy.objects.create(name=f"policy-{i}", source_name_prefix=f"prod-{i}-", **common)
+        base = dict(source_cluster=source.pk, target_cluster=target.pk, vlan=vlan.pk, prefix=prefix.pk,
+                    gateway="198.18.0.254", mirror_name_prefix="mirror-wp-", vmid_offset=10700, catalogs=[wp.pk, db.pk])
+        cls.create_data = [
+            {"name": "omg-wordpress", "source_name_prefix": "prod-wp-", **base},
+            {"name": "omg-erp", "source_name_prefix": "prod-erp-", "enabled": False, **base},
+            {"name": "omg-other", "source_name_prefix": "prod-x-", "interface_name": "net0",
+             "replication_name_prefix": "", **base},
+        ]
 
 
 class HostRoleAPITest(_CRUD):

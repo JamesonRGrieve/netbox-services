@@ -50,6 +50,16 @@ class HAActiveNodeChoices(ChoiceSet):
     CHOICES = [(PRIMARY, "Primary", "green"), (MIRROR, "Mirror", "orange")]
 
 
+class MirrorModeChoices(ChoiceSet):
+    """How an HA mirror instance takes one config param from its primary (``CatalogConfigParam``):
+    ``copy`` the primary's stored value, ``omit`` it (a primary-only setting, e.g. SSO or analytics),
+    or store the param's ``mirror_value`` instead (``fixed``)."""
+    COPY = "copy"
+    OMIT = "omit"
+    FIXED = "fixed"
+    CHOICES = [(COPY, "Copy", "green"), (OMIT, "Omit", "gray"), (FIXED, "Fixed", "orange")]
+
+
 class DistroChoices(ChoiceSet):
     """Harness test distro the per-(catalog, distro) test state is keyed by."""
     DEBIAN = "debian"

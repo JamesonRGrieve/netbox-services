@@ -32,12 +32,13 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from ipam.choices import ServiceProtocolChoices
+from netaddr import IPAddress
 from netbox.models import NetBoxModel
 from .choices import (
     ExtensionInstallTierChoices, InstanceOpenBaoPathGeneratorChoices,
     DatabaseTypeChoices, DistroChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
-    ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
+    MirrorModeChoices, ProviderScopeChoices, SecretKindChoices, ServiceInstanceStatusChoices,
 )
 
 # The catalog name of an OpenBao vault instance (InstanceOpenBaoPath.vault / effective_vault).
@@ -301,6 +302,12 @@ class CatalogConfigParam(NetBoxModel):
         help_text="The resource.attribute the tofu-services provider maps this param onto.",
     )
     description = models.CharField(max_length=255, blank=True)
+    mirror_mode = models.CharField(
+        max_length=8, choices=MirrorModeChoices, default=MirrorModeChoices.COPY,
+        help_text="What an HA mirror instance stores for this param: the primary's value (copy), nothing (omit), "
+                  "or mirror_value (fixed).",
+    )
+    mirror_value = models.TextField(blank=True, help_text="The mirror's value when mirror_mode is fixed.")
 
     class Meta:
         ordering = ["catalog", "key"]
@@ -320,6 +327,16 @@ class CatalogConfigParam(NetBoxModel):
 
     def get_value_type_color(self):
         return IntegrationParamValueTypeChoices.colors.get(self.value_type)
+
+    def get_mirror_mode_color(self):
+        return MirrorModeChoices.colors.get(self.mirror_mode)
+
+    def clean(self):
+        super().clean()
+        if self.mirror_mode == MirrorModeChoices.FIXED and self.secret:
+            raise ValidationError({"mirror_mode": "A secret param holds an OpenBao path; it cannot take a fixed mirror value."})
+        if self.mirror_mode != MirrorModeChoices.FIXED and self.mirror_value:
+            raise ValidationError({"mirror_value": "mirror_value applies only when mirror_mode is fixed."})
 
 
 class CatalogExtension(NetBoxModel):
@@ -911,6 +928,10 @@ class HAMirror(NetBoxModel):
     cloudflare_lb = models.BooleanField(
         default=False, help_text="The pair sits behind the Cloudflare load balancer.",
     )
+    seeded = models.BooleanField(
+        default=False,
+        help_text="The mirror holds the primary's data (seed restore done), so replication may run both ways.",
+    )
 
     class Meta:
         ordering = ["primary", "mirror"]
@@ -934,6 +955,71 @@ class HAMirror(NetBoxModel):
                 raise ValidationError("A service instance cannot be its own HA mirror.")
             if self.mirror.catalog_id != self.primary.catalog_id:
                 raise ValidationError("HA mirror and primary must be the same service type.")
+
+
+class HAMirrorPolicy(NetBoxModel):
+    """The rule that derives a primary guest's HA mirror (``ha_derive.derive_mirror``). A guest in
+    ``source_cluster`` whose name starts with ``source_name_prefix`` gets a mirror guest named
+    ``mirror_name_prefix`` + the rest of its name in ``target_cluster``: VMID = the primary's +
+    ``vmid_offset``; one interface ``interface_name`` on ``vlan`` with ``gateway``; its address is the
+    primary's host offset inside ``prefix`` (203.0.113.20/25 → 198.18.0.20/24). The mirror carries one
+    instance of each primary instance whose catalog is in ``catalogs``, with config values per
+    ``CatalogConfigParam.mirror_mode``, an :class:`HAMirror` row for each catalog whose
+    ``ha_strategy`` is not none, and, for MariaDB master-master, the netbox-database server,
+    replication (``replication_name_prefix`` + key + ``-replication``) and node rows. Deriving creates
+    and syncs; it never deletes a mirror or changes a mirror guest's status."""
+
+    name = models.CharField(max_length=100, unique=True)
+    enabled = models.BooleanField(default=True)
+    source_cluster = models.ForeignKey(
+        "virtualization.Cluster", on_delete=models.PROTECT, related_name="+", help_text="Where primaries run."
+    )
+    source_name_prefix = models.CharField(max_length=64, help_text="Primary guest name prefix, e.g. prod-wp-.")
+    mirror_name_prefix = models.CharField(max_length=64, help_text="Mirror guest name prefix, e.g. mirror-wp-.")
+    vmid_offset = models.PositiveIntegerField(help_text="Mirror VMID = primary VMID + this (320 + 10700 = 11020).")
+    target_cluster = models.ForeignKey(
+        "virtualization.Cluster", on_delete=models.PROTECT, related_name="+", help_text="Where mirrors run."
+    )
+    target_device = models.ForeignKey(
+        "dcim.Device", on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+        help_text="The mirror guest's host device in the target cluster.",
+    )
+    interface_name = models.CharField(max_length=64, default="eth0")
+    vlan = models.ForeignKey("ipam.VLAN", on_delete=models.PROTECT, related_name="+")
+    prefix = models.ForeignKey("ipam.Prefix", on_delete=models.PROTECT, related_name="+")
+    gateway = models.GenericIPAddressField(protocol="IPv4", help_text="Set explicitly on every mirror interface.")
+    catalogs = models.ManyToManyField(ServiceCatalog, related_name="+", help_text="Services the mirror carries.")
+    replication_name_prefix = models.CharField(max_length=64, blank=True, default="wp-")
+    replication_semi_sync = models.BooleanField(default=True)
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "HA Mirror Policy"
+        verbose_name_plural = "HA Mirror Policies"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_services:hamirrorpolicy", args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        if self.source_cluster_id and self.source_cluster_id == self.target_cluster_id \
+                and self.source_name_prefix == self.mirror_name_prefix:
+            raise ValidationError("A mirror must differ from its primary in cluster or name prefix.")
+        if self.prefix_id and self.gateway and IPAddress(self.gateway) not in self.prefix.prefix:
+            raise ValidationError({"gateway": f"{self.gateway} is outside {self.prefix.prefix}."})
+        if self.prefix_id and self.vlan_id and self.prefix.vlan_id not in (None, self.vlan_id):
+            raise ValidationError({"prefix": f"{self.prefix.prefix} is on another VLAN than {self.vlan}."})
+
+    def matches(self, vm):
+        """True when ``vm`` is a primary this policy mirrors."""
+        return self.enabled and vm.cluster_id == self.source_cluster_id and vm.name.startswith(self.source_name_prefix)
+
+    def mirror_name(self, vm):
+        return self.mirror_name_prefix + vm.name[len(self.source_name_prefix):]
 
 
 # --------------------------------------------------------------------------- host-role layer

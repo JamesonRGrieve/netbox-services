@@ -6,14 +6,16 @@ The ``ServiceInstance.parent`` GFK follows the core ``ipam.Service`` pattern: ``
 nested representation. ``listeners`` is a writable nested M2M to ``ipam.Service``."""
 from django.contrib.contenttypes.models import ContentType
 from drf_spectacular.utils import extend_schema_field
-from ipam.api.serializers import ServiceSerializer
+from dcim.api.serializers import DeviceSerializer
+from ipam.api.serializers import PrefixSerializer, ServiceSerializer, VLANSerializer
 from ipam.models import Service
 from netbox.api.fields import ContentTypeField, SerializedPKRelatedField
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
+from virtualization.api.serializers import ClusterSerializer
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
-    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HAMirrorPolicy, HostRole,
     HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
     RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
@@ -103,7 +105,7 @@ class CatalogConfigParamSerializer(NetBoxModelSerializer):
         model = CatalogConfigParam
         fields = [
             "id", "url", "display", "catalog", "key", "value_type", "required", "default", "secret",
-            "provider_attr", "description", *_META,
+            "provider_attr", "description", "mirror_mode", "mirror_value", *_META,
         ]
         brief_fields = ["id", "url", "display", "key", "value_type"]
 
@@ -264,8 +266,29 @@ class HAMirrorSerializer(NetBoxModelSerializer):
 
     class Meta:
         model = HAMirror
-        fields = ["id", "url", "display", "mirror", "primary", "active_node", "cloudflare_lb", *_META]
+        fields = ["id", "url", "display", "mirror", "primary", "active_node", "cloudflare_lb", "seeded", *_META]
         brief_fields = ["id", "url", "display", "mirror", "primary"]
+
+
+class HAMirrorPolicySerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_services-api:hamirrorpolicy-detail")
+    source_cluster = ClusterSerializer(nested=True)
+    target_cluster = ClusterSerializer(nested=True)
+    target_device = DeviceSerializer(nested=True, required=False, allow_null=True)
+    vlan = VLANSerializer(nested=True)
+    prefix = PrefixSerializer(nested=True)
+    catalogs = SerializedPKRelatedField(
+        queryset=ServiceCatalog.objects.all(), serializer=ServiceCatalogSerializer, nested=True, many=True,
+    )
+
+    class Meta:
+        model = HAMirrorPolicy
+        fields = [
+            "id", "url", "display", "name", "enabled", "source_cluster", "source_name_prefix", "mirror_name_prefix",
+            "vmid_offset", "target_cluster", "target_device", "interface_name", "vlan", "prefix", "gateway",
+            "catalogs", "replication_name_prefix", "replication_semi_sync", "description", *_META,
+        ]
+        brief_fields = ["id", "url", "display", "name"]
 
 
 class HostRoleSerializer(NetBoxModelSerializer):

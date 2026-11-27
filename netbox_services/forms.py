@@ -10,16 +10,17 @@ from utilities.forms.fields import (
     DynamicModelChoiceField, DynamicModelMultipleChoiceField, TagFilterField,
 )
 from utilities.forms.rendering import FieldSet
-from virtualization.models import VirtualMachine
+from ipam.models import Prefix, VLAN
+from virtualization.models import Cluster, VirtualMachine
 from .choices import (
     DatabaseTypeChoices, DistroChoices, ExtensionInstallTierChoices, InstanceOpenBaoPathGeneratorChoices, ExtensionKindChoices, HAActiveNodeChoices, HAStrategyChoices,
     IntegrationParamValueTypeChoices, McpCapabilityChoices, McpSourceTypeChoices, McpTransportChoices,
-    ProviderScopeChoices, ServiceInstanceStatusChoices,
+    MirrorModeChoices, ProviderScopeChoices, ServiceInstanceStatusChoices,
 )
 from .models import (
     OPENBAO_CATALOG,
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
-    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HAMirrorPolicy, HostRole,
     HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
     ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
@@ -115,12 +116,13 @@ class CatalogConfigParamForm(NetBoxModelForm):
     fieldsets = (
         FieldSet("catalog", "key", "value_type", "required", "default", "secret", "provider_attr",
                  "description", name="Config param"),
+        FieldSet("mirror_mode", "mirror_value", name="HA mirror"),
     )
 
     class Meta:
         model = CatalogConfigParam
         fields = ["catalog", "key", "value_type", "required", "default", "secret", "provider_attr",
-                  "description", "tags"]
+                  "description", "mirror_mode", "mirror_value", "tags"]
 
 
 class ServiceInstanceConfigValueForm(NetBoxModelForm):
@@ -252,11 +254,35 @@ class IntegrationForm(NetBoxModelForm):
 class HAMirrorForm(NetBoxModelForm):
     mirror = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
     primary = DynamicModelChoiceField(queryset=ServiceInstance.objects.all())
-    fieldsets = (FieldSet("mirror", "primary", "active_node", "cloudflare_lb", name="HA pairing"),)
+    fieldsets = (FieldSet("mirror", "primary", "active_node", "cloudflare_lb", "seeded", name="HA pairing"),)
 
     class Meta:
         model = HAMirror
-        fields = ["mirror", "primary", "active_node", "cloudflare_lb", "tags"]
+        fields = ["mirror", "primary", "active_node", "cloudflare_lb", "seeded", "tags"]
+
+
+class HAMirrorPolicyForm(NetBoxModelForm):
+    source_cluster = DynamicModelChoiceField(queryset=Cluster.objects.all())
+    target_cluster = DynamicModelChoiceField(queryset=Cluster.objects.all())
+    target_device = DynamicModelChoiceField(queryset=Device.objects.all(), required=False)
+    vlan = DynamicModelChoiceField(queryset=VLAN.objects.all())
+    prefix = DynamicModelChoiceField(queryset=Prefix.objects.all())
+    catalogs = DynamicModelMultipleChoiceField(queryset=ServiceCatalog.objects.all())
+    fieldsets = (
+        FieldSet("name", "enabled", "description", name="Policy"),
+        FieldSet("source_cluster", "source_name_prefix", name="Primaries"),
+        FieldSet("mirror_name_prefix", "vmid_offset", "target_cluster", "target_device", name="Mirror guest"),
+        FieldSet("interface_name", "vlan", "prefix", "gateway", name="Mirror network"),
+        FieldSet("catalogs", "replication_name_prefix", "replication_semi_sync", name="Mirror services"),
+    )
+
+    class Meta:
+        model = HAMirrorPolicy
+        fields = [
+            "name", "enabled", "source_cluster", "source_name_prefix", "mirror_name_prefix", "vmid_offset",
+            "target_cluster", "target_device", "interface_name", "vlan", "prefix", "gateway", "catalogs",
+            "replication_name_prefix", "replication_semi_sync", "description", "tags",
+        ]
 
 
 class HostRoleForm(NetBoxModelForm):
@@ -462,6 +488,7 @@ class CatalogConfigParamFilterForm(NetBoxModelFilterSetForm):
     value_type = forms.MultipleChoiceField(choices=IntegrationParamValueTypeChoices, required=False)
     required = forms.NullBooleanField(required=False)
     secret = forms.NullBooleanField(required=False)
+    mirror_mode = forms.MultipleChoiceField(choices=MirrorModeChoices, required=False)
     tag = TagFilterField(CatalogConfigParam)
 
 
@@ -535,7 +562,16 @@ class HAMirrorFilterForm(NetBoxModelFilterSetForm):
     primary_id = DynamicModelMultipleChoiceField(queryset=ServiceInstance.objects.all(), required=False, label="Primary")
     active_node = forms.MultipleChoiceField(choices=HAActiveNodeChoices, required=False)
     cloudflare_lb = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES))
+    seeded = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES))
     tag = TagFilterField(HAMirror)
+
+
+class HAMirrorPolicyFilterForm(NetBoxModelFilterSetForm):
+    model = HAMirrorPolicy
+    source_cluster_id = DynamicModelMultipleChoiceField(queryset=Cluster.objects.all(), required=False, label="Source cluster")
+    target_cluster_id = DynamicModelMultipleChoiceField(queryset=Cluster.objects.all(), required=False, label="Target cluster")
+    enabled = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES))
+    tag = TagFilterField(HAMirrorPolicy)
 
 
 class HostRoleFilterForm(NetBoxModelFilterSetForm):

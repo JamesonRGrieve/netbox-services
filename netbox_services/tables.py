@@ -3,7 +3,7 @@ import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 from .models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
-    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HAMirrorPolicy, HostRole,
     HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
     RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
@@ -103,12 +103,13 @@ class CatalogConfigParamTable(NetBoxTable):
     value_type = columns.ChoiceFieldColumn()
     required = columns.BooleanColumn()
     secret = columns.BooleanColumn()
+    mirror_mode = columns.ChoiceFieldColumn()
     tags = columns.TagColumn(url_name="plugins:netbox_services:catalogconfigparam_list")
 
     class Meta(NetBoxTable.Meta):
         model = CatalogConfigParam
         fields = ("pk", "id", "catalog", "key", "value_type", "required", "default", "secret",
-                  "provider_attr", "description", "tags", "created", "last_updated")
+                  "provider_attr", "description", "mirror_mode", "mirror_value", "tags", "created", "last_updated")
         default_columns = ("catalog", "key", "value_type", "required", "secret", "provider_attr")
 
 
@@ -226,12 +227,33 @@ class HAMirrorTable(NetBoxTable):
     primary = tables.Column(linkify=True)
     active_node = columns.ChoiceFieldColumn()
     cloudflare_lb = columns.BooleanColumn()
+    seeded = columns.BooleanColumn()
     tags = columns.TagColumn(url_name="plugins:netbox_services:hamirror_list")
 
     class Meta(NetBoxTable.Meta):
         model = HAMirror
-        fields = ("pk", "id", "mirror", "primary", "active_node", "cloudflare_lb", "tags", "created", "last_updated")
-        default_columns = ("mirror", "primary", "active_node", "cloudflare_lb")
+        fields = ("pk", "id", "mirror", "primary", "active_node", "cloudflare_lb", "seeded", "tags", "created",
+                  "last_updated")
+        default_columns = ("mirror", "primary", "active_node", "cloudflare_lb", "seeded")
+
+
+class HAMirrorPolicyTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    enabled = columns.BooleanColumn()
+    source_cluster = tables.Column(linkify=True)
+    target_cluster = tables.Column(linkify=True)
+    vlan = tables.Column(linkify=True)
+    prefix = tables.Column(linkify=True)
+    catalogs = columns.ManyToManyColumn(linkify_item=True)
+    tags = columns.TagColumn(url_name="plugins:netbox_services:hamirrorpolicy_list")
+
+    class Meta(NetBoxTable.Meta):
+        model = HAMirrorPolicy
+        fields = ("pk", "id", "name", "enabled", "source_cluster", "source_name_prefix", "mirror_name_prefix",
+                  "vmid_offset", "target_cluster", "target_device", "interface_name", "vlan", "prefix", "gateway",
+                  "catalogs", "replication_name_prefix", "replication_semi_sync", "description", "tags", "created",
+                  "last_updated")
+        default_columns = ("name", "enabled", "source_cluster", "source_name_prefix", "target_cluster", "prefix")
 
 
 class HostRoleTable(NetBoxTable):

@@ -3,7 +3,7 @@ from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
 from ..models import (
     CatalogConfigParam, CatalogCredential, CatalogExtension, CatalogMcpServer, CatalogMcpServerParam,
-    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HostRole,
+    CatalogSecondaryPort, CatalogTestIntegration, CatalogTestState, CatalogToken, HAMirror, HAMirrorPolicy, HostRole,
     HostRoleAssignment, HostRoleAssignmentVar, HostRoleParam, Integration, IntegrationCatalog,
     IntegrationCatalogParam, IntegrationParam, InstanceOpenBaoPath, McpServer, McpServerParam,
     RotationPolicy, ServiceCatalog, ServiceInstance, ServiceInstanceConfigValue,
@@ -13,7 +13,7 @@ from .serializers import (
     CatalogConfigParamSerializer, CatalogCredentialSerializer, CatalogExtensionSerializer,
     CatalogMcpServerParamSerializer, CatalogMcpServerSerializer,
     CatalogSecondaryPortSerializer, CatalogTestIntegrationSerializer, CatalogTestStateSerializer,
-    CatalogTokenSerializer, HAMirrorSerializer, HostRoleAssignmentSerializer,
+    CatalogTokenSerializer, HAMirrorPolicySerializer, HAMirrorSerializer, HostRoleAssignmentSerializer,
     HostRoleAssignmentVarSerializer, HostRoleParamSerializer, HostRoleSerializer,
     IntegrationCatalogParamSerializer, IntegrationCatalogSerializer, IntegrationParamSerializer,
     IntegrationSerializer, InstanceOpenBaoPathSerializer, McpServerParamSerializer, McpServerSerializer,
@@ -122,6 +122,14 @@ class HAMirrorViewSet(NetBoxModelViewSet):
     queryset = HAMirror.objects.prefetch_related("mirror", "primary", "tags")
     serializer_class = HAMirrorSerializer
     filterset_class = filtersets.HAMirrorFilterSet
+
+
+class HAMirrorPolicyViewSet(NetBoxModelViewSet):
+    queryset = HAMirrorPolicy.objects.prefetch_related(
+        "source_cluster", "target_cluster", "target_device", "vlan", "prefix", "catalogs", "tags"
+    )
+    serializer_class = HAMirrorPolicySerializer
+    filterset_class = filtersets.HAMirrorPolicyFilterSet
 
 
 class HostRoleViewSet(NetBoxModelViewSet):
